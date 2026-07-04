@@ -1,0 +1,817 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lumen Admin</title>
+<style>
+  :root {
+    --pink: #e0447a;
+    --ink: #1a1418;
+    --muted: #7a6f74;
+    --border: #ece3e6;
+    --bg: #fdfaf9;
+    --card: #ffffff;
+    --warn: #c8781f;
+    --danger: #c8353f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--card);
+  }
+  header h1 {
+    font-size: 18px;
+    margin: 0;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  header h1 span { color: var(--pink); }
+  #whoami { font-size: 13px; color: var(--muted); margin-right: 12px; }
+  button {
+    font: inherit;
+    cursor: pointer;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    padding: 8px 14px;
+  }
+  button.primary {
+    background: var(--pink);
+    color: white;
+    border-color: var(--pink);
+  }
+  button.ghost { background: transparent; }
+  button:disabled { opacity: 0.5; cursor: default; }
+
+  main { max-width: 960px; margin: 0 auto; padding: 24px; }
+
+  /* --- Login --- */
+  #loginView {
+    max-width: 360px;
+    margin: 80px auto;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px;
+  }
+  #loginView h2 { margin-top: 0; }
+  #loginView input {
+    width: 100%;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font: inherit;
+  }
+  #loginError { color: var(--danger); font-size: 13px; min-height: 18px; }
+
+  /* --- Dashboard --- */
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .tabs button.active { background: var(--ink); color: white; border-color: var(--ink); }
+
+  .report {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+  .report-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .reason-badge {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: #fbe9ee;
+    color: var(--pink);
+    margin-bottom: 6px;
+  }
+  .status-badge {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 3px 8px;
+    border-radius: 999px;
+  }
+  .status-pending { background: #fdf1de; color: var(--warn); }
+  .status-reviewed { background: #e6f0fb; color: #2860b8; }
+  .status-actioned, .status-approved { background: #e7f5ea; color: #2c8a45; }
+  .status-rejected { background: #fbe7e8; color: var(--danger); }
+
+  .who { font-size: 13px; color: var(--muted); margin: 4px 0; }
+  .who b { color: var(--ink); }
+  .details { font-size: 14px; margin: 8px 0; white-space: pre-wrap; }
+  .meta { font-size: 12px; color: var(--muted); }
+
+  .empty { text-align: center; color: var(--muted); padding: 60px 0; }
+
+  .section-nav { display: flex; gap: 8px; margin-bottom: 20px; }
+  .section-nav button.active { background: var(--pink); color: white; border-color: var(--pink); }
+
+  .verify-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+  .photo-row { display: flex; gap: 10px; margin: 10px 0; flex-wrap: wrap; }
+  .photo-col { text-align: center; }
+  .photo-col .label { font-size: 11px; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.03em; }
+  .photo-thumb {
+    width: 96px; height: 96px;
+    border-radius: 10px;
+    object-fit: cover;
+    background: var(--bg);
+    border: 1px solid var(--border);
+  }
+  .selfie-thumb { border: 2px solid var(--pink); }
+  .verify-actions { display: flex; gap: 8px; margin-top: 12px; }
+  button.approve { background: #2c8a45; color: white; border-color: #2c8a45; }
+  button.reject { background: var(--danger); color: white; border-color: var(--danger); }
+
+  /* --- Action modal --- */
+  .overlay {
+    position: fixed; inset: 0;
+    background: rgba(20,15,17,0.45);
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px;
+  }
+  .modal {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 24px;
+    width: 100%;
+    max-width: 400px;
+  }
+  .modal h3 { margin-top: 0; }
+  .modal label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
+  .modal select, .modal input {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font: inherit;
+  }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+
+  .hidden { display: none !important; }
+
+  /* --- Test tools --- */
+  .tool-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    max-width: 480px;
+  }
+  .tool-card label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
+  .tool-card label:first-child { margin-top: 0; }
+  .tool-card select, .tool-card input, .tool-card textarea {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font: inherit;
+  }
+  .tool-card textarea { resize: vertical; min-height: 70px; }
+  .tool-status { font-size: 13px; margin-top: 12px; min-height: 18px; }
+  .tool-status.success { color: #2c8a45; }
+  .tool-status.error { color: var(--danger); }
+
+  .mod-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 14px;
+  }
+  .mod-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .mod-card img {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    display: block;
+    background: var(--bg);
+  }
+  .mod-card-body { padding: 10px 12px; }
+  .mod-card .who { margin: 0 0 8px; }
+  .mod-actions { display: flex; gap: 8px; }
+  .mod-actions button { flex: 1; padding: 6px 0; font-size: 13px; }
+  .mod-labels { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
+  .label-chip {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #fbe9ee;
+    color: var(--pink);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Lumen <span>Admin</span></h1>
+  <div id="headerRight">
+    <span id="whoami"></span>
+    <button id="logoutBtn" class="ghost hidden">Log out</button>
+  </div>
+</header>
+
+<main>
+  <section id="loginView">
+    <h2>Admin sign in</h2>
+    <input id="loginEmail" type="email" placeholder="Email" autocomplete="username">
+    <input id="loginPassword" type="password" placeholder="Password" autocomplete="current-password">
+    <button class="primary" id="loginBtn" style="width:100%">Sign in</button>
+    <div id="loginError"></div>
+  </section>
+
+  <section id="dashboardView" class="hidden">
+    <div class="section-nav">
+      <button data-section="reports" class="active">Reports</button>
+      <button data-section="verification">Verification</button>
+      <button data-section="photos">Photos</button>
+      <button data-section="test-tools">Test Tools</button>
+    </div>
+
+    <div id="reportsSection">
+      <div class="tabs">
+        <button data-status="" class="active">All</button>
+        <button data-status="pending">Pending</button>
+        <button data-status="reviewed">Reviewed</button>
+        <button data-status="actioned">Actioned</button>
+        <button id="refreshBtn" class="ghost" style="margin-left:auto">Refresh</button>
+      </div>
+      <div id="reportsList"></div>
+    </div>
+
+    <div id="verificationSection" class="hidden">
+      <div class="tabs">
+        <button data-vstatus="pending" class="active">Pending</button>
+        <button data-vstatus="approved">Approved</button>
+        <button data-vstatus="rejected">Rejected</button>
+        <button id="verificationRefreshBtn" class="ghost" style="margin-left:auto">Refresh</button>
+      </div>
+      <div id="verificationList"></div>
+    </div>
+
+    <div id="photosSection" class="hidden">
+      <div class="tabs">
+        <button data-pstatus="pending" class="active">Pending</button>
+        <button data-pstatus="approved">Approved</button>
+        <button id="rescanBtn" class="ghost" style="margin-left:auto">Rescan Approved Photos</button>
+        <button id="photosRefreshBtn" class="ghost">Refresh</button>
+      </div>
+      <div id="rescanStatus" class="tool-status"></div>
+      <div id="photosGrid" class="mod-grid"></div>
+    </div>
+
+    <div id="testToolsSection" class="hidden">
+      <div class="tool-card">
+        <h3 style="margin-top:0">Send a message as a test account</h3>
+        <p style="font-size:13px;color:var(--muted);margin-top:-8px">
+          Picks (or creates) a match between the test account and the email you enter, then
+          sends the message — it'll arrive live in the app if that account is online.
+        </p>
+
+        <label for="testFromAccount">Send as</label>
+        <select id="testFromAccount"></select>
+
+        <label for="testToEmail">Send to (email)</label>
+        <input id="testToEmail" type="email" placeholder="you@example.com">
+
+        <label for="testMessageContent">Message</label>
+        <textarea id="testMessageContent" placeholder="Hey! Testing..."></textarea>
+
+        <button class="primary" id="testSendBtn" style="margin-top:16px;width:100%">Send</button>
+        <div id="testToolsStatus" class="tool-status"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="modalRoot"></div>
+
+<script>
+const API = ''; // same-origin
+
+const els = {
+  loginView: document.getElementById('loginView'),
+  dashboardView: document.getElementById('dashboardView'),
+  loginEmail: document.getElementById('loginEmail'),
+  loginPassword: document.getElementById('loginPassword'),
+  loginBtn: document.getElementById('loginBtn'),
+  loginError: document.getElementById('loginError'),
+  logoutBtn: document.getElementById('logoutBtn'),
+  whoami: document.getElementById('whoami'),
+  reportsList: document.getElementById('reportsList'),
+  refreshBtn: document.getElementById('refreshBtn'),
+  modalRoot: document.getElementById('modalRoot'),
+  tabs: document.querySelectorAll('.tabs button[data-status]'),
+  sectionNav: document.querySelectorAll('.section-nav button[data-section]'),
+  reportsSection: document.getElementById('reportsSection'),
+  verificationSection: document.getElementById('verificationSection'),
+  verificationList: document.getElementById('verificationList'),
+  verificationRefreshBtn: document.getElementById('verificationRefreshBtn'),
+  verificationTabs: document.querySelectorAll('.tabs button[data-vstatus]'),
+  photosSection: document.getElementById('photosSection'),
+  photosGrid: document.getElementById('photosGrid'),
+  photosRefreshBtn: document.getElementById('photosRefreshBtn'),
+  rescanBtn: document.getElementById('rescanBtn'),
+  rescanStatus: document.getElementById('rescanStatus'),
+  photosTabs: document.querySelectorAll('.tabs button[data-pstatus]'),
+  testToolsSection: document.getElementById('testToolsSection'),
+  testFromAccount: document.getElementById('testFromAccount'),
+  testToEmail: document.getElementById('testToEmail'),
+  testMessageContent: document.getElementById('testMessageContent'),
+  testSendBtn: document.getElementById('testSendBtn'),
+  testToolsStatus: document.getElementById('testToolsStatus'),
+};
+
+let activeStatus = '';
+let activeVerificationStatus = 'pending';
+let activePhotoStatus = 'pending';
+
+function getTokens() {
+  return {
+    accessToken: localStorage.getItem('lumen_admin_access'),
+    refreshToken: localStorage.getItem('lumen_admin_refresh'),
+  };
+}
+function setTokens(accessToken, refreshToken) {
+  localStorage.setItem('lumen_admin_access', accessToken);
+  if (refreshToken) localStorage.setItem('lumen_admin_refresh', refreshToken);
+}
+function clearTokens() {
+  localStorage.removeItem('lumen_admin_access');
+  localStorage.removeItem('lumen_admin_refresh');
+}
+
+// Wraps fetch with the admin's bearer token and a single silent-refresh-and-retry on 401,
+// mirroring the retry-once pattern the iOS client already uses against this same API.
+async function authedFetch(path, options = {}) {
+  const { accessToken } = getTokens();
+  const doFetch = (token) => fetch(API + path, {
+    ...options,
+    headers: {
+      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(options.headers || {}),
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  let res = await doFetch(accessToken);
+  if (res.status === 401) {
+    const { refreshToken } = getTokens();
+    if (refreshToken) {
+      const refreshRes = await fetch(API + '/auth/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+      if (refreshRes.ok) {
+        const { accessToken: newToken } = await refreshRes.json();
+        setTokens(newToken);
+        res = await doFetch(newToken);
+      } else {
+        logout();
+        throw new Error('Session expired');
+      }
+    }
+  }
+  return res;
+}
+
+function showDashboard(email) {
+  els.loginView.classList.add('hidden');
+  els.dashboardView.classList.remove('hidden');
+  els.logoutBtn.classList.remove('hidden');
+  els.whoami.textContent = email;
+}
+
+function showLogin() {
+  els.loginView.classList.remove('hidden');
+  els.dashboardView.classList.add('hidden');
+  els.logoutBtn.classList.add('hidden');
+  els.whoami.textContent = '';
+}
+
+function logout() {
+  clearTokens();
+  showLogin();
+}
+
+els.logoutBtn.addEventListener('click', logout);
+
+els.loginBtn.addEventListener('click', async () => {
+  els.loginError.textContent = '';
+  els.loginBtn.disabled = true;
+  try {
+    const res = await fetch(API + '/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: els.loginEmail.value.trim(),
+        password: els.loginPassword.value,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Login failed');
+
+    setTokens(data.accessToken, data.refreshToken);
+
+    // Confirm admin access up front rather than letting every subsequent action guess.
+    const check = await authedFetch('/reports/admin');
+    if (check.status === 403) {
+      clearTokens();
+      throw new Error('This account is not an admin.');
+    }
+    if (!check.ok) throw new Error('Could not load reports.');
+
+    showDashboard(els.loginEmail.value.trim());
+    renderReports(await check.json());
+  } catch (err) {
+    els.loginError.textContent = err.message;
+  } finally {
+    els.loginBtn.disabled = false;
+  }
+});
+
+els.loginPassword.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') els.loginBtn.click();
+});
+
+els.tabs.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    els.tabs.forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeStatus = btn.dataset.status;
+    loadReports();
+  });
+});
+els.refreshBtn.addEventListener('click', loadReports);
+
+els.sectionNav.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    els.sectionNav.forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    const section = btn.dataset.section;
+    els.reportsSection.classList.toggle('hidden', section !== 'reports');
+    els.verificationSection.classList.toggle('hidden', section !== 'verification');
+    els.photosSection.classList.toggle('hidden', section !== 'photos');
+    els.testToolsSection.classList.toggle('hidden', section !== 'test-tools');
+    if (section === 'verification') loadVerification();
+    if (section === 'photos') loadPhotos();
+    if (section === 'test-tools') loadTestAccounts();
+  });
+});
+
+els.photosTabs.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    els.photosTabs.forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    activePhotoStatus = btn.dataset.pstatus;
+    loadPhotos();
+  });
+});
+els.photosRefreshBtn.addEventListener('click', loadPhotos);
+
+els.rescanBtn.addEventListener('click', async () => {
+  els.rescanBtn.disabled = true;
+  els.rescanStatus.textContent = 'Rescanning every approved photo — this can take a while...';
+  els.rescanStatus.className = 'tool-status';
+  try {
+    const res = await authedFetch('/moderation/rescan', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Rescan failed');
+
+    els.rescanStatus.textContent = `Scanned ${data.totalScanned}: ${data.stillApproved} still approved, ${data.nowPending} moved to pending, ${data.nowRejected} rejected and removed.`;
+    els.rescanStatus.classList.add(data.nowPending + data.nowRejected > 0 ? 'error' : 'success');
+    if (activePhotoStatus === 'pending') loadPhotos();
+  } catch (err) {
+    els.rescanStatus.textContent = err.message;
+    els.rescanStatus.classList.add('error');
+  } finally {
+    els.rescanBtn.disabled = false;
+  }
+});
+
+async function loadPhotos() {
+  els.photosGrid.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const res = await authedFetch(`/moderation/photos?status=${activePhotoStatus}`);
+    if (!res.ok) throw new Error('Failed to load photo queue');
+    renderPhotos(await res.json());
+  } catch (err) {
+    els.photosGrid.innerHTML = `<div class="empty">${err.message}</div>`;
+  }
+}
+
+function renderPhotos(data) {
+  const photos = data.photos || [];
+  if (photos.length === 0) {
+    els.photosGrid.innerHTML = '<div class="empty">Nothing here.</div>';
+    return;
+  }
+
+  els.photosGrid.innerHTML = photos.map((p) => `
+    <div class="mod-card">
+      <img src="${escapeAttr(p.url)}">
+      <div class="mod-card-body">
+        <div class="who">${escapeHtml(p.userEmail)}</div>
+        ${(p.labels && p.labels.length > 0) ? `
+          <div class="mod-labels">${p.labels.map((l) => `<span class="label-chip">${escapeHtml(l)}</span>`).join('')}</div>
+        ` : ''}
+        ${p.status === 'pending' ? `
+          <div class="mod-actions">
+            <button class="approve" onclick="actOnPhoto('${p.id}', 'approve')">Approve</button>
+            <button class="reject" onclick="actOnPhoto('${p.id}', 'reject')">Reject</button>
+          </div>
+        ` : `<span class="status-badge status-approved">${p.status}</span>`}
+      </div>
+    </div>
+  `).join('');
+}
+
+window.actOnPhoto = async function (photoId, action) {
+  try {
+    const res = await authedFetch(`/moderation/photos/${photoId}/action`, {
+      method: 'POST',
+      body: JSON.stringify({ action }),
+    });
+    if (!res.ok) throw new Error('Failed to submit decision');
+    loadPhotos();
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
+async function loadTestAccounts() {
+  if (els.testFromAccount.dataset.loaded) return; // accounts don't change mid-session
+  try {
+    const res = await authedFetch('/admin-tools/test-accounts');
+    if (!res.ok) throw new Error('Failed to load test accounts');
+    const { accounts } = await res.json();
+    els.testFromAccount.innerHTML = accounts
+      .map((a) => `<option value="${a.id}">${escapeHtml(a.email)}</option>`)
+      .join('');
+    els.testFromAccount.dataset.loaded = '1';
+  } catch (err) {
+    els.testFromAccount.innerHTML = '<option>Failed to load</option>';
+  }
+}
+
+els.testSendBtn.addEventListener('click', async () => {
+  els.testToolsStatus.textContent = '';
+  els.testToolsStatus.className = 'tool-status';
+
+  const fromUserId = els.testFromAccount.value;
+  const toEmail = els.testToEmail.value.trim();
+  const content = els.testMessageContent.value.trim();
+
+  if (!fromUserId || !toEmail || !content) {
+    els.testToolsStatus.textContent = 'Fill in all three fields.';
+    els.testToolsStatus.classList.add('error');
+    return;
+  }
+
+  els.testSendBtn.disabled = true;
+  try {
+    const res = await authedFetch('/admin-tools/send-message', {
+      method: 'POST',
+      body: JSON.stringify({ fromUserId, toEmail, content }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to send');
+
+    els.testToolsStatus.textContent = 'Sent — check the app.';
+    els.testToolsStatus.classList.add('success');
+    els.testMessageContent.value = '';
+  } catch (err) {
+    els.testToolsStatus.textContent = err.message;
+    els.testToolsStatus.classList.add('error');
+  } finally {
+    els.testSendBtn.disabled = false;
+  }
+});
+
+els.verificationTabs.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    els.verificationTabs.forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeVerificationStatus = btn.dataset.vstatus;
+    loadVerification();
+  });
+});
+els.verificationRefreshBtn.addEventListener('click', loadVerification);
+
+async function loadVerification() {
+  els.verificationList.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const res = await authedFetch(`/verification/admin?status=${activeVerificationStatus}`);
+    if (!res.ok) throw new Error('Failed to load verification requests');
+    renderVerification(await res.json());
+  } catch (err) {
+    els.verificationList.innerHTML = `<div class="empty">${err.message}</div>`;
+  }
+}
+
+function renderVerification(data) {
+  const requests = data.requests || [];
+  if (requests.length === 0) {
+    els.verificationList.innerHTML = '<div class="empty">Nothing here.</div>';
+    return;
+  }
+
+  els.verificationList.innerHTML = requests.map((r) => `
+    <div class="verify-card">
+      <div class="who"><b>${escapeHtml(r.email)}</b></div>
+      <div class="photo-row">
+        <div class="photo-col">
+          ${r.selfieUrl ? `<img class="photo-thumb selfie-thumb" src="${escapeAttr(r.selfieUrl)}">` : '<div class="photo-thumb"></div>'}
+          <div class="label">Selfie</div>
+        </div>
+        ${r.profilePhotoUrls.map((url) => `
+          <div class="photo-col">
+            <img class="photo-thumb" src="${escapeAttr(url)}">
+            <div class="label">Profile</div>
+          </div>
+        `).join('')}
+      </div>
+      ${r.status === 'pending' ? `
+        <div class="verify-actions">
+          <button class="approve" onclick="actOnVerification('${r.userId}', 'approve')">Approve</button>
+          <button class="reject" onclick="actOnVerification('${r.userId}', 'reject')">Reject</button>
+        </div>
+      ` : `<span class="status-badge status-${r.status}">${r.status}</span>`}
+    </div>
+  `).join('');
+}
+
+window.actOnVerification = async function (userId, action) {
+  try {
+    const res = await authedFetch(`/verification/admin/${userId}/action`, {
+      method: 'POST',
+      body: JSON.stringify({ action }),
+    });
+    if (!res.ok) throw new Error('Failed to submit decision');
+    loadVerification();
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
+async function loadReports() {
+  els.reportsList.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const qs = activeStatus ? `?status=${activeStatus}` : '';
+    const res = await authedFetch('/reports/admin' + qs);
+    if (!res.ok) throw new Error('Failed to load reports');
+    renderReports(await res.json());
+  } catch (err) {
+    els.reportsList.innerHTML = `<div class="empty">${err.message}</div>`;
+  }
+}
+
+const REASON_LABELS = {
+  harassment: 'Harassment',
+  fake_profile: 'Fake profile',
+  misrepresenting_presentation: 'Misrepresenting presentation',
+  inappropriate_content: 'Inappropriate content',
+  underage_suspicion: 'Underage suspicion',
+  other: 'Other',
+};
+
+function renderReports(data) {
+  const reports = data.reports || [];
+  if (reports.length === 0) {
+    els.reportsList.innerHTML = '<div class="empty">No reports here.</div>';
+    return;
+  }
+
+  els.reportsList.innerHTML = reports.map((r) => `
+    <div class="report">
+      <div class="report-top">
+        <div>
+          <span class="reason-badge">${REASON_LABELS[r.reason] || r.reason}</span>
+          <div class="who"><b>Reported:</b> ${escapeHtml(r.reported?.email || r.reportedId)}
+            ${r.reported?.isSuspended ? ' · <b style="color:var(--danger)">suspended</b>' : ''}</div>
+          <div class="who"><b>Reporter:</b> ${escapeHtml(r.reporter?.email || r.reporterId)}</div>
+        </div>
+        <span class="status-badge status-${r.status}">${r.status}</span>
+      </div>
+      ${r.details ? `<div class="details">${escapeHtml(r.details)}</div>` : ''}
+      <div class="meta">
+        Filed ${new Date(r.createdAt).toLocaleString()}
+        ${r.actionTaken ? ` · Action taken: ${r.actionTaken}` : ''}
+      </div>
+      ${r.status !== 'actioned' ? `<div style="margin-top:12px">
+        <button class="primary" onclick="openActionModal('${r.id}', '${escapeAttr(r.reported?.email || '')}')">Take action</button>
+      </div>` : ''}
+    </div>
+  `).join('');
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function escapeAttr(s) { return escapeHtml(s).replace(/'/g, '&#39;'); }
+
+window.openActionModal = function (reportId, reportedEmail) {
+  els.modalRoot.innerHTML = `
+    <div class="overlay" onclick="if(event.target===this) closeModal()">
+      <div class="modal">
+        <h3>Take action</h3>
+        <div class="who">Against <b>${escapeHtml(reportedEmail)}</b></div>
+        <label for="actionSelect">Action</label>
+        <select id="actionSelect">
+          <option value="no_action">No action</option>
+          <option value="warning">Warning</option>
+          <option value="temporary_suspension">Temporary suspension</option>
+          <option value="permanent_suspension">Permanent suspension</option>
+        </select>
+        <div id="suspensionDaysRow" class="hidden">
+          <label for="suspensionDays">Suspension length (days)</label>
+          <input id="suspensionDays" type="number" min="1" value="7">
+        </div>
+        <div class="modal-actions">
+          <button class="ghost" onclick="closeModal()">Cancel</button>
+          <button class="primary" id="submitActionBtn">Confirm</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const select = document.getElementById('actionSelect');
+  const daysRow = document.getElementById('suspensionDaysRow');
+  select.addEventListener('change', () => {
+    daysRow.classList.toggle('hidden', select.value !== 'temporary_suspension');
+  });
+
+  document.getElementById('submitActionBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('submitActionBtn');
+    btn.disabled = true;
+    try {
+      const action = select.value;
+      const suspensionDays = action === 'temporary_suspension'
+        ? parseInt(document.getElementById('suspensionDays').value, 10)
+        : undefined;
+
+      const res = await authedFetch(`/reports/admin/${reportId}/action`, {
+        method: 'POST',
+        body: JSON.stringify({ action, suspensionDays }),
+      });
+      if (!res.ok) throw new Error('Failed to take action');
+
+      closeModal();
+      loadReports();
+    } catch (err) {
+      alert(err.message);
+      btn.disabled = false;
+    }
+  });
+};
+
+window.closeModal = function () {
+  els.modalRoot.innerHTML = '';
+};
+
+// Auto-login if a token is already stashed from a previous session.
+(async function init() {
+  const { accessToken } = getTokens();
+  if (!accessToken) return showLogin();
+  try {
+    const check = await authedFetch('/reports/admin');
+    if (!check.ok) throw new Error();
+    showDashboard('Admin');
+    renderReports(await check.json());
+  } catch {
+    logout();
+  }
+})();
+</script>
+</body>
+</html>

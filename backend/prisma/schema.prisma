@@ -1,0 +1,240 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum GenderIdentity {
+  woman
+  femboy
+  trans_woman
+  nonbinary_feminine
+  other
+}
+
+enum SwipeDirection {
+  like
+  pass
+  super_like
+}
+
+enum ModerationStatus {
+  pending
+  approved
+  rejected
+}
+
+enum VerificationStatus {
+  none
+  pending
+  approved
+  rejected
+}
+
+enum ReportStatus {
+  pending
+  reviewed
+  actioned
+}
+
+enum ReportReason {
+  harassment
+  fake_profile
+  misrepresenting_presentation
+  inappropriate_content
+  underage_suspicion
+  other
+}
+
+model User {
+  id       String @id @default(uuid())
+  email    String @unique
+  phone    String @unique
+  // Nullable because an Apple-only account has no password at all — Apple's own signed token
+  // is the entire authentication, see routes/auth.ts's POST /auth/apple. Email/password login
+  // simply isn't available for those accounts (checked at the /auth/login route).
+  passwordHash String?
+  // Apple's stable per-user identifier (the `sub` claim), set the first time someone either
+  // signs up via Apple or links Apple to an existing email/password account.
+  appleUserId String? @unique
+
+  dateOfBirth             DateTime
+  genderIdentity          GenderIdentity
+  genderIdentityOther     String?
+  femAttestationAccepted  Boolean   @default(false)
+  femAttestationAcceptedAt DateTime?
+
+  bio          String?
+  pronouns     String?
+  styleTags    String[] @default([])
+  heightInches Int?
+  jobTitle     String?
+  school       String?
+
+  prompt1Question String?
+  prompt1Answer   String?
+  prompt2Question String?
+  prompt2Answer   String?
+
+  isVerified               Boolean             @default(false)
+  verificationPhotoUrl     String?
+  verificationStatus       VerificationStatus  @default(none)
+  verificationReviewedById String?
+  verificationReviewedAt   DateTime?
+
+  latitude    Float?
+  longitude   Float?
+  cityDisplay String?
+
+  isActive     Boolean  @default(true)
+  discoverable Boolean  @default(true)
+  lastActiveAt DateTime @default(now())
+
+  isAdmin Boolean @default(false)
+
+  phoneVerified Boolean   @default(false)
+  otpCode       String?
+  otpExpiresAt  DateTime?
+
+  isSuspended      Boolean   @default(false)
+  suspendedUntil   DateTime?
+  suspensionReason String?
+
+  createdAt DateTime @default(now())
+
+  photos          Photo[]
+  refreshTokens   RefreshToken[]
+
+  swipesMade      Swipe[]  @relation("SwipesMade")
+  swipesReceived  Swipe[]  @relation("SwipesReceived")
+
+  matchesAsA Match[] @relation("MatchUserA")
+  matchesAsB Match[] @relation("MatchUserB")
+
+  messagesSent Message[]
+
+  reportsMade     Report[] @relation("ReportsMade")
+  reportsReceived Report[] @relation("ReportsReceived")
+  reportsReviewed Report[] @relation("ReportsReviewed")
+
+  blocksMade     Block[] @relation("BlocksMade")
+  blocksReceived Block[] @relation("BlocksReceived")
+
+  verificationReviewedBy User?  @relation("VerificationReviewer", fields: [verificationReviewedById], references: [id])
+  verificationsReviewed  User[] @relation("VerificationReviewer")
+}
+
+model Photo {
+  id               String            @id @default(uuid())
+  userId           String
+  url              String
+  order            Int
+  moderationStatus ModerationStatus  @default(pending)
+  // Human-readable classifier output at the time of the last moderation check (e.g. "Porn
+  // (24%)") — stored so an admin reviewing the Photos queue can see *why* something was
+  // flagged instead of just the resulting status. Recomputed whenever moderateImage() runs
+  // (upload or rescan), not append-only history.
+  moderationLabels String[]          @default([])
+  createdAt        DateTime          @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Catalog of every style tag ever used, upserted when a user adds a new tag
+// to their profile. Powers autocomplete/browsing. The user's chosen tags
+// themselves live on User.styleTags for fast reads (see app_spec.md Section 5).
+model Tag {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+}
+
+model Swipe {
+  id        String         @id @default(uuid())
+  swiperId  String
+  swipedId  String
+  direction SwipeDirection
+  createdAt DateTime       @default(now())
+
+  // Hinge-style targeted likes: which specific photo or prompt (1 or 2) was liked, plus an
+  // optional comment. Not a formal relation to Photo — a like is a record of what was liked
+  // *at the time*, and shouldn't vanish or need cascade-handling if the photo is later deleted.
+  likedPhotoId     String?
+  likedPromptNumber Int?
+  message          String?
+
+  swiper User @relation("SwipesMade", fields: [swiperId], references: [id], onDelete: Cascade)
+  swiped User @relation("SwipesReceived", fields: [swipedId], references: [id], onDelete: Cascade)
+
+  @@unique([swiperId, swipedId])
+}
+
+model Match {
+  id          String    @id @default(uuid())
+  userAId     String
+  userBId     String
+  createdAt   DateTime  @default(now())
+  unmatchedAt DateTime?
+  unmatchedBy String?
+
+  userA    User      @relation("MatchUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB    User      @relation("MatchUserB", fields: [userBId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@unique([userAId, userBId])
+}
+
+model Message {
+  id        String    @id @default(uuid())
+  matchId   String
+  senderId  String
+  content   String?
+  imageUrl  String?
+  createdAt DateTime  @default(now())
+  readAt    DateTime?
+
+  match  Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  sender User  @relation(fields: [senderId], references: [id], onDelete: Cascade)
+}
+
+model Report {
+  id           String       @id @default(uuid())
+  reporterId   String
+  reportedId   String
+  reason       ReportReason
+  details      String?
+  status       ReportStatus @default(pending)
+  actionTaken  String?
+  reviewedById String?
+  reviewedAt   DateTime?
+  createdAt    DateTime     @default(now())
+
+  reporter   User  @relation("ReportsMade", fields: [reporterId], references: [id], onDelete: Cascade)
+  reported   User  @relation("ReportsReceived", fields: [reportedId], references: [id], onDelete: Cascade)
+  reviewedBy User? @relation("ReportsReviewed", fields: [reviewedById], references: [id])
+}
+
+model Block {
+  id        String   @id @default(uuid())
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+
+  blocker User @relation("BlocksMade", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("BlocksReceived", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

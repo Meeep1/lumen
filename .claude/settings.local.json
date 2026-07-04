@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mv backendsrcserver.ts backend/src/server.ts)",
+      "Bash(mv backendsrcroutesauth.ts backend/src/routes/auth.ts)",
+      "Bash(mv backendsrcroutesprofile.ts backend/src/routes/profile.ts)",
+      "Bash(mv backendsrcroutesdiscovery.ts backend/src/routes/discovery.ts)",
+      "Bash(mv backendsrcroutesswipe.ts backend/src/routes/swipe.ts)",
+      "Bash(npm install *)",
+      "Bash(cp .env.example .env)",
+      "Bash(createdb lumen *)",
+      "Bash(npx prisma *)",
+      "Bash(psql lumen *)",
+      "Bash(npx tsc *)",
+      "Bash(curl -s -X POST http://localhost:3000/auth/signup -H 'Content-Type: application/json' -d '{ *)",
+      "Read(//private/tmp/**)",
+      "Bash(curl -s -X POST http://localhost:3000/auth/verify-otp -H \"Content-Type: application/json\" -d '{\"phone\":\"5555550123\",\"code\":\"929143\"}')",
+      "Bash(curl -s -X POST http://localhost:3000/auth/login -H \"Content-Type: application/json\" -d '{\"email\":\"test@example.com\",\"password\":\"testpassword123\"}')",
+      "Bash(pkill -f \"tsx watch src/server.ts\")",
+      "Bash(mkdir -p Lumen/App Lumen/Models Lumen/Services Lumen/Views/Auth Lumen/Views/Discovery Lumen/Views/Matches Lumen/Views/Profile)",
+      "Bash(mv LumenApp.swift Lumen/App/LumenApp.swift)",
+      "Bash(mv ModelsModels.swift Lumen/Models/Models.swift)",
+      "Bash(mv ServicesAPIService.swift Lumen/Services/APIService.swift)",
+      "Bash(mv ServicesKeychainManager.swift Lumen/Services/KeychainManager.swift)",
+      "Bash(ruby -v)",
+      "Bash(gem list *)",
+      "Bash(gem install *)",
+      "Bash(cd \"/Users/camdenheil/Library/Developer/Xcode/UntitledProjects/Untitled Project\" && cp \"Untitled Project.xcodeproj/project.pbxproj\" \"/tmp/project.pbxproj.bak\" && echo backed up)",
+      "Bash(ruby \"/private/tmp/claude-501/-Users-camdenheil-Library-Developer-Xcode-UntitledProjects-Untitled-Project/d8010d05-18ae-4347-9d07-b12cdf46af61/scratchpad/fix_pbxproj.rb\")",
+      "Bash(plutil -lint \"Untitled Project.xcodeproj/project.pbxproj\")",
+      "Bash(awk '/Begin PBXSourcesBuildPhase section/,/End PBXSourcesBuildPhase section/' \"Untitled Project.xcodeproj/project.pbxproj\")",
+      "Bash(awk '/Begin PBXGroup section/,/End PBXGroup section/' \"Untitled Project.xcodeproj/project.pbxproj\")",
+      "Bash(ruby \"/private/tmp/claude-501/-Users-camdenheil-Library-Developer-Xcode-UntitledProjects-Untitled-Project/d8010d05-18ae-4347-9d07-b12cdf46af61/scratchpad/validate_pbxproj.rb\")"
+    ],
+    "additionalDirectories": [
+      "/tmp"
+    ]
+  }
+}
