@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import type { WebSocket } from 'ws';
+import type { Match, Message } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import IORedis from 'ioredis';
 import { prisma, redis } from '../server';
@@ -32,6 +33,49 @@ export function sendToUser(userId: string, type: string, payload: unknown) {
   const sockets = userSockets.get(userId);
   if (!sockets) return;
   for (const socket of sockets) send(socket, type, payload);
+}
+
+/// Delivers an already-created message in real time and, if the recipient isn't currently
+/// online, pushes it — the one place this happens, called from both a socket 'send_message' and
+/// the REST POST /matches/:matchId/messages (see routes/match.ts), so a message only ever gets
+/// created once regardless of which path the client used, instead of each path creating (and
+/// broadcasting) its own separate row for the same logical send.
+export async function broadcastNewMessage(match: Match, created: Message): Promise<void> {
+  const payload = {
+    messageId: created.id,
+    matchId: created.matchId,
+    senderId: created.senderId,
+    content: created.content,
+    imageUrl: created.imageUrl,
+    createdAt: created.createdAt,
+  };
+
+  // Both participants get it (sender included) — mirrors the old Socket.IO room broadcast,
+  // which included the sender's own socket too; the client dedupes by message id.
+  sendToUser(match.userAId, 'new_message', payload);
+  sendToUser(match.userBId, 'new_message', payload);
+
+  const otherUserId = match.userAId === created.senderId ? match.userBId : match.userAId;
+  const isOnline = await redis.get(`user:${otherUserId}:online`);
+  if (!isOnline) {
+    const recipient = await prisma.user.findUnique({
+      where: { id: otherUserId },
+      select: { notifyNewMessage: true, pushToken: true },
+    });
+    if (recipient?.notifyNewMessage && recipient.pushToken) {
+      const result = await sendPushNotification(recipient.pushToken, {
+        title: 'New Message',
+        body: created.content ? created.content.slice(0, 100) : 'Sent you a photo',
+        data: { matchId: created.matchId },
+      });
+      if (!result.ok && result.reason === 'invalid-token') {
+        await prisma.user.update({
+          where: { id: otherUserId },
+          data: { pushToken: null, pushPlatform: null },
+        });
+      }
+    }
+  }
 }
 
 async function authenticateSocket(authHeader: string | undefined): Promise<string | null> {
@@ -143,42 +187,7 @@ export function setupSocketHandlers(fastify: FastifyInstance) {
               data: { matchId, senderId: currentUserId, content, imageUrl },
             });
 
-            const payload = {
-              messageId: created.id,
-              matchId: created.matchId,
-              senderId: created.senderId,
-              content: created.content,
-              imageUrl: created.imageUrl,
-              createdAt: created.createdAt,
-            };
-
-            // Both participants get it (sender included) — mirrors the old Socket.IO room
-            // broadcast, which included the sender's own socket too; the client already
-            // dedupes by message id against its own optimistic/REST-sent copy.
-            sendToUser(match.userAId, 'new_message', payload);
-            sendToUser(match.userBId, 'new_message', payload);
-
-            const otherUserId = match.userAId === currentUserId ? match.userBId : match.userAId;
-            const isOnline = await redis.get(`user:${otherUserId}:online`);
-            if (!isOnline) {
-              const recipient = await prisma.user.findUnique({
-                where: { id: otherUserId },
-                select: { notifyNewMessage: true, pushToken: true },
-              });
-              if (recipient?.notifyNewMessage && recipient.pushToken) {
-                const result = await sendPushNotification(recipient.pushToken, {
-                  title: 'New Message',
-                  body: content ? content.slice(0, 100) : 'Sent you a photo',
-                  data: { matchId },
-                });
-                if (!result.ok && result.reason === 'invalid-token') {
-                  await prisma.user.update({
-                    where: { id: otherUserId },
-                    data: { pushToken: null, pushPlatform: null },
-                  });
-                }
-              }
-            }
+            await broadcastNewMessage(match, created);
             break;
           }
 

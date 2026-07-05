@@ -3,6 +3,7 @@ import { prisma } from '../server';
 import { authenticate } from '../middleware/auth';
 import { sendMessageSchema, zodErrorMessage } from '../utils/validation';
 import { getPresignedUrl } from '../utils/storage';
+import { broadcastNewMessage } from '../socket/handlers';
 
 export default async function matchRoutes(fastify: FastifyInstance) {
   // Get all matches
@@ -183,6 +184,11 @@ export default async function matchRoutes(fastify: FastifyInstance) {
           imageUrl: data.imageUrl,
         },
       });
+
+      // Same delivery (real-time push to both participants + APNs if the recipient's offline)
+      // as a message sent over the socket — see broadcastNewMessage's own comment for why this
+      // is a shared function rather than each path creating and delivering its own copy.
+      await broadcastNewMessage(match, message);
 
       return reply.status(201).send({ message });
     } catch (error: any) {

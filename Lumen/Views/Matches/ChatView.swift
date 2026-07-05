@@ -172,14 +172,14 @@ struct ChatView: View {
     
     private func sendMessage() async {
         guard !messageText.isEmpty else { return }
-        
+
         let text = messageText
         messageText = ""
-        
-        // Send via socket for real-time delivery
-        socketManager.sendMessage(matchId: match.matchId, content: text, imageUrl: nil)
-        
-        // Also send via API for persistence
+
+        // REST only, not also the socket — the backend delivers this to the other participant
+        // (and pushes if they're offline) as a side effect of creating it either way, so sending
+        // through both created two separate messages for one send. REST also gives a real
+        // async result to await/catch, unlike the socket's fire-and-forget send.
         do {
             let message = try await APIService.shared.sendMessage(
                 matchId: match.matchId,
