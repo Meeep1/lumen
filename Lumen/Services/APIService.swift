@@ -39,9 +39,14 @@ extension Notification.Name {
 class APIService {
     static let shared = APIService()
     
-    // Simulator can use localhost; a physical device needs your Mac's LAN IP
-    // (Simulator and device must be able to reach the port your `npm run dev` is bound to).
+    // Debug builds hit local dev (Simulator can use localhost; a physical device needs your
+    // Mac's LAN IP reachable from wherever `npm run dev` is bound). Release builds hit
+    // production directly — no manual flip needed before archiving for TestFlight/App Store.
+    #if DEBUG
     private let baseURL = "http://192.168.68.59:3000"
+    #else
+    private let baseURL = "https://lumenfem.app"
+    #endif
 
     /// Backend photo URLs (from `getPresignedUrl` in local-dev mode) are host-relative paths
     /// like "/uploads/photos/…", not full URLs — resolve them against baseURL so AsyncImage

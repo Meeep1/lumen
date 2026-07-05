@@ -10,6 +10,13 @@ struct SettingsView: View {
     @State private var showingDeleteError = false
     @State private var deleteErrorMessage = ""
 
+    // Keep in sync with APIService.baseURL / SocketManager.socketURL.
+    #if DEBUG
+    private let legalBaseURL = "http://192.168.68.59:3000"
+    #else
+    private let legalBaseURL = "https://lumenfem.app"
+    #endif
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -68,21 +75,17 @@ struct SettingsView: View {
 
                     SettingsSection(title: "About") {
                         SettingsCard {
-                            // Real pages now (backend/public/site/), served by the same backend
-                            // as everything else — no more example.com placeholders. Still the
-                            // dev LAN IP though, same as APIService.baseURL: swap all of these
-                            // (in one place, ideally a shared constant, if this grows past three
-                            // call sites) to the real production domain once Phase 3's actual
-                            // domain/TLS work lands.
-                            Link(destination: URL(string: "http://192.168.68.59:3000/terms")!) {
+                            // Real pages (backend/public/site/), served by the same backend as
+                            // everything else.
+                            Link(destination: URL(string: "\(legalBaseURL)/terms")!) {
                                 SettingsRow(icon: "doc.text.fill", title: "Terms of Service")
                             }
                             Divider().padding(.leading, 52)
-                            Link(destination: URL(string: "http://192.168.68.59:3000/privacy")!) {
+                            Link(destination: URL(string: "\(legalBaseURL)/privacy")!) {
                                 SettingsRow(icon: "hand.raised.fill", title: "Privacy Policy")
                             }
                             Divider().padding(.leading, 52)
-                            Link(destination: URL(string: "http://192.168.68.59:3000/community-guidelines")!) {
+                            Link(destination: URL(string: "\(legalBaseURL)/community-guidelines")!) {
                                 SettingsRow(icon: "book.fill", title: "Community Guidelines")
                             }
                         }

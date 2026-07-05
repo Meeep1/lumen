@@ -13,6 +13,10 @@ module.exports = {
       name: 'lumen-backend',
       script: 'dist/server.js',
       instances: 1,
+      // Explicit, not just relying on pm2's default — raw WebSockets (@fastify/websocket) don't
+      // reliably work across multiple cluster workers without extra sticky-session config this
+      // app doesn't have, so this must stay a single forked process, not Node's cluster module.
+      exec_mode: 'fork',
       autorestart: true,
       max_restarts: 10,
       min_uptime: '30s',
@@ -28,6 +32,11 @@ module.exports = {
       name: 'lumen-worker',
       script: 'dist/worker.js',
       instances: 1,
+      // Explicit for the same reason as lumen-backend above — and doubly so here, since this
+      // process isn't an HTTP server at all (it just consumes a BullMQ queue), so Node's cluster
+      // module (which exists to share a listening port across forked workers) has nothing
+      // meaningful to do for it regardless.
+      exec_mode: 'fork',
       autorestart: true,
       max_restarts: 10,
       min_uptime: '30s',

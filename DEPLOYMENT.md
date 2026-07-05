@@ -121,6 +121,7 @@ production and vice versa.
 |---|---|
 | `NODE_ENV` | `production` |
 | `DATABASE_URL` | `postgresql://lumen:<password>@localhost:5432/lumen?schema=public` |
+| `FRONTEND_URL` | `https://lumenfem.app` — **required** once `NODE_ENV=production`. `server.ts` passes this straight to `@fastify/cors`'s `origin` option, which throws `Invalid CORS origin option` on every single request (500s, but the process itself still comes up and passes `/health` if you check too early) if it's left unset. |
 | `REDIS_URL` | `redis://localhost:6379` |
 | `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` | New values from `openssl rand -base64 32` — **not** the same ones as dev |
 | `ADMIN_BASIC_AUTH_USER` / `ADMIN_BASIC_AUTH_PASSWORD` | New values, different from dev — this is what hides `/admin/` from the public |
@@ -151,6 +152,11 @@ schema-related note in `ROADMAP.md` for why):
 ```bash
 npx prisma db push
 ```
+**Check this actually succeeded** before moving on — if `DATABASE_URL`'s password doesn't match
+what you set in step 3, this fails but doesn't stop the deploy script, and the only symptom is a
+cryptic `P2021: The table 'public.User' does not exist` crash loop when you start the app several
+steps later. Confirm you see `Your database is now in sync with your Prisma schema` (or run
+`npx prisma db pull` / `psql -U lumen -d lumen -c '\dt'` to see the tables exist) before continuing.
 
 ---
 
@@ -261,12 +267,16 @@ places to look.
 
 ## 10. Point the iOS app at production
 
-Two places still reference the dev LAN IP — update both once this is live:
+**Done.** All three spots that referenced the dev LAN IP are now build-configuration-based
+(`#if DEBUG` → LAN IP/`ws://`, `#else` → `https://lumenfem.app`/`wss://`), so Debug builds keep
+hitting local dev and Release builds (TestFlight/App Store archives) automatically hit production
+— nothing to remember to flip back:
 
-- `Lumen/Services/APIService.swift` — `baseURL` constant. Ideally make this build-configuration-
-  based (Debug → LAN IP/localhost, Release → `https://lumenfem.app`) rather than a single
-  hardcoded value, so you don't have to remember to flip it back for local development.
-- `Lumen/Views/Profile/SettingsView.swift` — the three legal-page `Link(destination:)` URLs.
+- `Lumen/Services/APIService.swift` — `baseURL` constant.
+- `Lumen/Services/SocketManager.swift` — `socketURL` constant (also switches `ws://` → `wss://`,
+  since production's WebSocket is behind Caddy's TLS same as everything else).
+- `Lumen/Views/Profile/SettingsView.swift` — new shared `legalBaseURL` constant, used by all three
+  legal-page `Link(destination:)` URLs.
 
 ---
 

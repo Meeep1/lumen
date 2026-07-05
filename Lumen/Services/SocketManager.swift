@@ -19,8 +19,12 @@ extension Notification.Name {
 class SocketManager: ObservableObject {
     static let shared = SocketManager()
 
-    // Keep in sync with APIService.baseURL
+    // Keep in sync with APIService.baseURL. Production uses wss:// (TLS, via Caddy) not ws://.
+    #if DEBUG
     private let socketURL = "ws://192.168.68.59:3000/ws"
+    #else
+    private let socketURL = "wss://lumenfem.app/ws"
+    #endif
 
     @Published var isConnected = false
     @Published var incomingMessages: [Message] = []
