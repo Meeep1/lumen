@@ -4,7 +4,7 @@
 
 import { FastifyInstance } from 'fastify';
 import { prisma } from '../server';
-import { authenticate, requireAdmin } from '../middleware/auth';
+import { authenticateAdmin, requirePermission } from '../middleware/adminAuth';
 import { sendToUser } from '../socket/handlers';
 import { getPresignedUrl } from '../utils/storage';
 
@@ -14,7 +14,7 @@ export default async function adminToolsRoutes(fastify: FastifyInstance) {
   // returns everything a moderator might need in one call: every photo regardless of moderation
   // status (unlike any user-facing profile query, which filters to approved-only), suspension
   // state, and account metadata.
-  fastify.get('/users/:userId', { preHandler: [authenticate, requireAdmin] }, async (request, reply) => {
+  fastify.get('/users/:userId', { preHandler: [authenticateAdmin, requirePermission('reports', 'moderation')] }, async (request, reply) => {
     try {
       const { userId } = request.params as { userId: string };
 
@@ -75,7 +75,7 @@ export default async function adminToolsRoutes(fastify: FastifyInstance) {
   // they actually have a match; a report doesn't require one (you can report from a profile
   // view without ever matching), so `hasMatch: false` is a normal, expected response, not an
   // error.
-  fastify.get('/messages', { preHandler: [authenticate, requireAdmin] }, async (request, reply) => {
+  fastify.get('/messages', { preHandler: [authenticateAdmin, requirePermission('reports')] }, async (request, reply) => {
     try {
       const { userA, userB } = request.query as { userA?: string; userB?: string };
       if (!userA || !userB) {
@@ -114,7 +114,7 @@ export default async function adminToolsRoutes(fastify: FastifyInstance) {
   });
 
   // List seed/test accounts an admin can send a message "as".
-  fastify.get('/test-accounts', { preHandler: [authenticate, requireAdmin] }, async (request, reply) => {
+  fastify.get('/test-accounts', { preHandler: [authenticateAdmin, requirePermission('testTools')] }, async (request, reply) => {
     try {
       const accounts = await prisma.user.findMany({
         where: { email: { endsWith: '+seed@lumen.test' } },
@@ -132,7 +132,7 @@ export default async function adminToolsRoutes(fastify: FastifyInstance) {
   // Send a message as a chosen test account to a real user (looked up by email). Auto-creates
   // the match (or un-unmatches it) if one doesn't already exist — this is a testing shortcut,
   // real matches always require mutual likes via the normal swipe flow.
-  fastify.post('/send-message', { preHandler: [authenticate, requireAdmin] }, async (request, reply) => {
+  fastify.post('/send-message', { preHandler: [authenticateAdmin, requirePermission('testTools')] }, async (request, reply) => {
     try {
       const { fromUserId, toEmail, content } = request.body as {
         fromUserId?: string;

@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { prisma } from '../server';
-import { authenticate, requireAdmin } from '../middleware/auth';
-import { requireBasicAuth } from '../middleware/basicAuth';
+import { authenticate } from '../middleware/auth';
+import { authenticateAdmin, requirePermission } from '../middleware/adminAuth';
 import { reportSchema, zodErrorMessage } from '../utils/validation';
 
 export default async function reportRoutes(fastify: FastifyInstance) {
@@ -53,11 +53,7 @@ export default async function reportRoutes(fastify: FastifyInstance) {
   });
 
   // Admin: Get all reports
-  // requireBasicAuth first — this file mixes the public POST / above with these admin-only
-  // routes, so (unlike admin-tools.ts/moderation.ts, which are admin-only start to finish and
-  // get the gate at the whole-file registration level in server.ts) it's added directly here
-  // instead of wrapping the entire route file.
-  fastify.get('/admin', { preHandler: [requireBasicAuth, authenticate, requireAdmin] }, async (request, reply) => {
+  fastify.get('/admin', { preHandler: [authenticateAdmin, requirePermission('reports')] }, async (request, reply) => {
     try {
       const { status } = request.query as { status?: string };
 
@@ -97,7 +93,7 @@ export default async function reportRoutes(fastify: FastifyInstance) {
   });
 
   // Admin: Take action on a report
-  fastify.post('/admin/:reportId/action', { preHandler: [requireBasicAuth, authenticate, requireAdmin] }, async (request, reply) => {
+  fastify.post('/admin/:reportId/action', { preHandler: [authenticateAdmin, requirePermission('reports')] }, async (request, reply) => {
     try {
       const { reportId } = request.params as { reportId: string };
       const { action, suspensionDays } = request.body as {
@@ -119,7 +115,7 @@ export default async function reportRoutes(fastify: FastifyInstance) {
         data: {
           status: 'actioned',
           actionTaken: action,
-          reviewedById: request.userId,
+          reviewedById: request.adminId,
           reviewedAt: new Date(),
         },
       });

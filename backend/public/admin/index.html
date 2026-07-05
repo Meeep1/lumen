@@ -239,6 +239,44 @@
   .chat-log { max-height: 260px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-top: 8px; }
   .chat-msg { font-size: 13px; margin-bottom: 8px; }
   .chat-msg .meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  /* --- Team --- */
+  .admin-row {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .admin-row.inactive { opacity: 0.55; }
+  .admin-email { font-weight: 600; }
+  .super-badge {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #fbe9ee;
+    color: var(--pink);
+    margin-left: 8px;
+  }
+  .perm-chip {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    margin-right: 4px;
+  }
+  .checkbox-row { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+  .checkbox-row label { margin: 0; font-weight: 400 !important; }
+  .checkbox-row input[type="checkbox"] { width: auto; margin: 0; }
 </style>
 </head>
 <body>
@@ -262,11 +300,12 @@
 
   <section id="dashboardView" class="hidden">
     <div class="section-nav">
-      <button data-section="reports" class="active">Reports</button>
-      <button data-section="verification">Verification</button>
-      <button data-section="photos">Photos</button>
-      <button data-section="appeals">Appeals</button>
-      <button data-section="test-tools">Test Tools</button>
+      <button data-section="reports" data-permission="reports" class="active">Reports</button>
+      <button data-section="verification" data-permission="verification">Verification</button>
+      <button data-section="photos" data-permission="moderation">Photos</button>
+      <button data-section="appeals" data-permission="moderation">Appeals</button>
+      <button data-section="test-tools" data-permission="testTools">Test Tools</button>
+      <button data-section="team" data-permission="__superAdmin">Team</button>
     </div>
 
     <div id="reportsSection">
@@ -333,6 +372,15 @@
         <div id="testToolsStatus" class="tool-status"></div>
       </div>
     </div>
+
+    <div id="teamSection" class="hidden">
+      <div class="tabs">
+        <span style="font-size:13px;color:var(--muted)">Admins who can sign in to this panel.</span>
+        <button id="addAdminBtn" class="primary" style="margin-left:auto">+ Add admin</button>
+        <button id="teamRefreshBtn" class="ghost">Refresh</button>
+      </div>
+      <div id="teamList"></div>
+    </div>
   </section>
 </main>
 
@@ -376,33 +424,33 @@ const els = {
   testMessageContent: document.getElementById('testMessageContent'),
   testSendBtn: document.getElementById('testSendBtn'),
   testToolsStatus: document.getElementById('testToolsStatus'),
+  teamSection: document.getElementById('teamSection'),
+  teamList: document.getElementById('teamList'),
+  addAdminBtn: document.getElementById('addAdminBtn'),
+  teamRefreshBtn: document.getElementById('teamRefreshBtn'),
 };
 
 let activeStatus = '';
 let activeVerificationStatus = 'pending';
 let activePhotoStatus = 'pending';
 let activeAppealStatus = 'pending';
+let currentAdmin = null; // { id, email, isSuperAdmin, permissions }
 
-function getTokens() {
-  return {
-    accessToken: localStorage.getItem('lumen_admin_access'),
-    refreshToken: localStorage.getItem('lumen_admin_refresh'),
-  };
+function getToken() {
+  return localStorage.getItem('lumen_admin_access');
 }
-function setTokens(accessToken, refreshToken) {
+function setToken(accessToken) {
   localStorage.setItem('lumen_admin_access', accessToken);
-  if (refreshToken) localStorage.setItem('lumen_admin_refresh', refreshToken);
 }
-function clearTokens() {
+function clearToken() {
   localStorage.removeItem('lumen_admin_access');
-  localStorage.removeItem('lumen_admin_refresh');
 }
 
-// Wraps fetch with the admin's bearer token and a single silent-refresh-and-retry on 401,
-// mirroring the retry-once pattern the iOS client already uses against this same API.
+// No refresh-token flow here (unlike the iOS client) — admin sessions are a single 12h access
+// token with no refresh (see routes/admin-auth.ts), so a 401 just means sign in again.
 async function authedFetch(path, options = {}) {
-  const { accessToken } = getTokens();
-  const doFetch = (token) => fetch(API + path, {
+  const token = getToken();
+  const res = await fetch(API + path, {
     ...options,
     headers: {
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
@@ -410,37 +458,42 @@ async function authedFetch(path, options = {}) {
       Authorization: `Bearer ${token}`,
     },
   });
-
-  let res = await doFetch(accessToken);
   if (res.status === 401) {
-    const { refreshToken } = getTokens();
-    if (refreshToken) {
-      const refreshRes = await fetch(API + '/auth/refresh', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
-      });
-      if (refreshRes.ok) {
-        const { accessToken: newToken } = await refreshRes.json();
-        setTokens(newToken);
-        res = await doFetch(newToken);
-      } else {
-        logout();
-        throw new Error('Session expired');
-      }
-    }
+    logout();
+    throw new Error('Session expired — sign in again');
   }
   return res;
 }
 
-function showDashboard(email) {
+// Shows/hides each section-nav button based on what this admin is actually allowed to see, and
+// switches to the first one still visible if the currently-active one just got hidden (e.g. a
+// permission was revoked elsewhere and this is a session restore on load).
+function applyPermissions(admin) {
+  let firstVisibleBtn = null;
+  els.sectionNav.forEach((btn) => {
+    const perm = btn.dataset.permission;
+    const allowed = perm === '__superAdmin' ? admin.isSuperAdmin : (admin.isSuperAdmin || admin.permissions.includes(perm));
+    btn.classList.toggle('hidden', !allowed);
+    if (allowed && !firstVisibleBtn) firstVisibleBtn = btn;
+  });
+
+  const activeBtn = Array.from(els.sectionNav).find((b) => b.classList.contains('active'));
+  if (!activeBtn || activeBtn.classList.contains('hidden')) {
+    firstVisibleBtn?.click();
+  }
+}
+
+function showDashboard(admin) {
+  currentAdmin = admin;
   els.loginView.classList.add('hidden');
   els.dashboardView.classList.remove('hidden');
   els.logoutBtn.classList.remove('hidden');
-  els.whoami.textContent = email;
+  els.whoami.textContent = admin.email + (admin.isSuperAdmin ? ' (super admin)' : '');
+  applyPermissions(admin);
 }
 
 function showLogin() {
+  currentAdmin = null;
   els.loginView.classList.remove('hidden');
   els.dashboardView.classList.add('hidden');
   els.logoutBtn.classList.add('hidden');
@@ -448,7 +501,7 @@ function showLogin() {
 }
 
 function logout() {
-  clearTokens();
+  clearToken();
   showLogin();
 }
 
@@ -458,7 +511,7 @@ els.loginBtn.addEventListener('click', async () => {
   els.loginError.textContent = '';
   els.loginBtn.disabled = true;
   try {
-    const res = await fetch(API + '/auth/login', {
+    const res = await fetch(API + '/admin-auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -469,18 +522,8 @@ els.loginBtn.addEventListener('click', async () => {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Login failed');
 
-    setTokens(data.accessToken, data.refreshToken);
-
-    // Confirm admin access up front rather than letting every subsequent action guess.
-    const check = await authedFetch('/reports/admin');
-    if (check.status === 403) {
-      clearTokens();
-      throw new Error('This account is not an admin.');
-    }
-    if (!check.ok) throw new Error('Could not load reports.');
-
-    showDashboard(els.loginEmail.value.trim());
-    renderReports(await check.json());
+    setToken(data.accessToken);
+    showDashboard(data.admin);
   } catch (err) {
     els.loginError.textContent = err.message;
   } finally {
@@ -512,10 +555,13 @@ els.sectionNav.forEach((btn) => {
     els.photosSection.classList.toggle('hidden', section !== 'photos');
     els.appealsSection.classList.toggle('hidden', section !== 'appeals');
     els.testToolsSection.classList.toggle('hidden', section !== 'test-tools');
+    els.teamSection.classList.toggle('hidden', section !== 'team');
+    if (section === 'reports') loadReports();
     if (section === 'verification') loadVerification();
     if (section === 'photos') loadPhotos();
     if (section === 'appeals') loadAppeals();
     if (section === 'test-tools') loadTestAccounts();
+    if (section === 'team') loadTeam();
   });
 });
 
@@ -989,15 +1035,171 @@ window.openProfileModal = async function (userId, chatWithUserId) {
   }
 };
 
-// Auto-login if a token is already stashed from a previous session.
-(async function init() {
-  const { accessToken } = getTokens();
-  if (!accessToken) return showLogin();
+els.addAdminBtn.addEventListener('click', () => openAdminModal());
+els.teamRefreshBtn.addEventListener('click', loadTeam);
+
+const PERMISSION_LABELS = {
+  reports: 'Reports',
+  verification: 'Verification',
+  moderation: 'Photos & Appeals',
+  testTools: 'Test Tools',
+};
+
+async function loadTeam() {
+  els.teamList.innerHTML = '<div class="empty">Loading…</div>';
   try {
-    const check = await authedFetch('/reports/admin');
-    if (!check.ok) throw new Error();
-    showDashboard('Admin');
-    renderReports(await check.json());
+    const res = await authedFetch('/admin-auth/team');
+    if (!res.ok) throw new Error('Failed to load team');
+    renderTeam(await res.json());
+  } catch (err) {
+    els.teamList.innerHTML = `<div class="empty">${err.message}</div>`;
+  }
+}
+
+function renderTeam(data) {
+  const admins = data.admins || [];
+  if (admins.length === 0) {
+    els.teamList.innerHTML = '<div class="empty">No admins yet.</div>';
+    return;
+  }
+
+  els.teamList.innerHTML = admins.map((a) => `
+    <div class="admin-row ${a.isActive ? '' : 'inactive'}">
+      <div>
+        <span class="admin-email">${escapeHtml(a.email)}</span>
+        ${a.isSuperAdmin ? '<span class="super-badge">Super Admin</span>' : ''}
+        ${!a.isActive ? '<span class="super-badge" style="background:#fbe7e8;color:var(--danger)">Deactivated</span>' : ''}
+        <div style="margin-top:6px">
+          ${a.isSuperAdmin
+            ? '<span class="meta">All access</span>'
+            : (a.permissions.length
+                ? a.permissions.map((p) => `<span class="perm-chip">${escapeHtml(PERMISSION_LABELS[p] || p)}</span>`).join('')
+                : '<span class="meta">No permissions granted yet</span>')}
+        </div>
+        <div class="meta" style="margin-top:6px">
+          ${a.lastLoginAt ? `Last signed in ${new Date(a.lastLoginAt).toLocaleString()}` : 'Never signed in'}
+        </div>
+      </div>
+      <div style="display:flex; gap:8px; flex-shrink:0">
+        <button class="ghost" onclick='openAdminModal(${JSON.stringify(a).replace(/'/g, "&#39;")})'>Edit</button>
+        ${a.id === currentAdmin.id ? '' : `<button class="reject" onclick="deleteAdmin('${a.id}', '${escapeAttr(a.email)}')">Delete</button>`}
+      </div>
+    </div>
+  `).join('');
+}
+
+// One modal for both creating and editing — `existing` is undefined for a brand new admin, or
+// the admin object (from renderTeam's row) when editing. Editing never touches the email (an
+// admin's email is effectively their identity) or shows a password field unless you choose to
+// set a new one.
+window.openAdminModal = function (existing) {
+  const isEdit = !!existing;
+  els.modalRoot.innerHTML = `
+    <div class="overlay" onclick="if(event.target===this) closeModal()">
+      <div class="modal">
+        <h3>${isEdit ? 'Edit admin' : 'Add admin'}</h3>
+        ${isEdit ? `<div class="who" style="margin-bottom:10px">${escapeHtml(existing.email)}</div>` : `
+          <label for="adminEmail">Email</label>
+          <input id="adminEmail" type="email" placeholder="teammate@example.com">
+        `}
+        <label for="adminPassword">${isEdit ? 'New password (leave blank to keep current)' : 'Password'}</label>
+        <input id="adminPassword" type="password" placeholder="${isEdit ? '••••••••' : 'At least 8 characters'}">
+
+        <div class="checkbox-row" style="margin-top:14px">
+          <input type="checkbox" id="adminIsSuper" ${existing?.isSuperAdmin ? 'checked' : ''}>
+          <label for="adminIsSuper">Super admin (all access, can manage other admins)</label>
+        </div>
+
+        <div id="adminPermRows" style="${existing?.isSuperAdmin ? 'display:none' : ''}">
+          <label style="margin-top:14px">Permissions</label>
+          ${Object.entries(PERMISSION_LABELS).map(([key, label]) => `
+            <div class="checkbox-row">
+              <input type="checkbox" class="admin-perm-checkbox" value="${key}" id="perm-${key}"
+                ${existing?.permissions?.includes(key) ? 'checked' : ''}>
+              <label for="perm-${key}">${label}</label>
+            </div>
+          `).join('')}
+        </div>
+
+        ${isEdit ? `
+          <div class="checkbox-row" style="margin-top:14px">
+            <input type="checkbox" id="adminIsActive" ${existing.isActive ? 'checked' : ''}>
+            <label for="adminIsActive">Active (unchecked = can't sign in)</label>
+          </div>
+        ` : ''}
+
+        <div id="adminModalError" style="color:var(--danger); font-size:13px; min-height:18px; margin-top:8px"></div>
+        <div class="modal-actions">
+          <button class="ghost" onclick="closeModal()">Cancel</button>
+          <button class="primary" id="submitAdminBtn">${isEdit ? 'Save' : 'Create'}</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('adminIsSuper').addEventListener('change', (e) => {
+    document.getElementById('adminPermRows').style.display = e.target.checked ? 'none' : '';
+  });
+
+  document.getElementById('submitAdminBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('submitAdminBtn');
+    const errEl = document.getElementById('adminModalError');
+    errEl.textContent = '';
+    btn.disabled = true;
+    try {
+      const isSuperAdmin = document.getElementById('adminIsSuper').checked;
+      const password = document.getElementById('adminPassword').value;
+      const permissions = Array.from(document.querySelectorAll('.admin-perm-checkbox:checked')).map((c) => c.value);
+
+      let res;
+      if (isEdit) {
+        const body = { isSuperAdmin, permissions, isActive: document.getElementById('adminIsActive').checked };
+        if (password) body.password = password;
+        res = await authedFetch(`/admin-auth/team/${existing.id}`, { method: 'PATCH', body: JSON.stringify(body) });
+      } else {
+        const email = document.getElementById('adminEmail').value.trim();
+        if (!email || !password) throw new Error('Email and password are required');
+        res = await authedFetch('/admin-auth/team', {
+          method: 'POST',
+          body: JSON.stringify({ email, password, isSuperAdmin, permissions }),
+        });
+      }
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save admin');
+
+      closeModal();
+      loadTeam();
+    } catch (err) {
+      errEl.textContent = err.message;
+      btn.disabled = false;
+    }
+  });
+};
+
+window.deleteAdmin = async function (id, email) {
+  if (!confirm(`Delete admin ${email}? This can't be undone.`)) return;
+  try {
+    const res = await authedFetch(`/admin-auth/team/${id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Failed to delete admin');
+    }
+    loadTeam();
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
+// Auto-login if a token is already stashed from a previous session — re-fetches permissions
+// fresh from /admin-auth/me rather than trusting a stale localStorage copy.
+(async function init() {
+  const token = getToken();
+  if (!token) return showLogin();
+  try {
+    const res = await authedFetch('/admin-auth/me');
+    if (!res.ok) throw new Error();
+    showDashboard(await res.json());
   } catch {
     logout();
   }

@@ -15,10 +15,16 @@ import { hashPassword } from '../src/utils/auth';
 
 const prisma = new PrismaClient();
 
+// Deliberately simple, not randomly generated — an Apple reviewer has to type this by hand into
+// the app, and this account can never hold anything sensitive anyway (every real login wipes it
+// back to blank, see resetTestAccount). Entropy just adds friction here for no real security
+// benefit; pass a second argument to override it if you want something else.
+const DEFAULT_PASSWORD = 'LumenReview2026';
+
 async function main() {
   const args = process.argv.slice(2);
   const email = args[0];
-  const password = args[1] || crypto.randomBytes(12).toString('base64url');
+  const password = args[1] || DEFAULT_PASSWORD;
 
   if (!email) {
     console.error('Usage: npm run create-test-account -- <email> [password]');

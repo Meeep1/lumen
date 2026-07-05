@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { prisma } from '../server';
-import { authenticate, requireAdmin } from '../middleware/auth';
+import { authenticateAdmin, requirePermission } from '../middleware/adminAuth';
 import { getPresignedUrl } from '../utils/storage';
 import { sendToUser } from '../socket/handlers';
 import { photoModerationQueue } from '../queue';
@@ -10,7 +10,7 @@ import { photoModerationQueue } from '../queue';
 /// user-facing query (they all filter moderationStatus: 'approved'), so this is purely for
 /// admins to clear the queue, not something end users interact with.
 export default async function moderationRoutes(fastify: FastifyInstance) {
-  fastify.get('/photos', { preHandler: [authenticate, requireAdmin] }, async (request, reply) => {
+  fastify.get('/photos', { preHandler: [authenticateAdmin, requirePermission('moderation')] }, async (request, reply) => {
     try {
       const { status } = request.query as { status?: string };
 
@@ -41,7 +41,7 @@ export default async function moderationRoutes(fastify: FastifyInstance) {
     }
   });
 
-  fastify.post('/photos/:photoId/action', { preHandler: [authenticate, requireAdmin] }, async (request, reply) => {
+  fastify.post('/photos/:photoId/action', { preHandler: [authenticateAdmin, requirePermission('moderation')] }, async (request, reply) => {
     try {
       const { photoId } = request.params as { photoId: string };
       const { action } = request.body as { action: 'approve' | 'reject' };
@@ -65,7 +65,7 @@ export default async function moderationRoutes(fastify: FastifyInstance) {
         where: { id: photoId },
         data: {
           moderationStatus: action === 'approve' ? 'approved' : 'rejected',
-          rejectedByAdminId: action === 'reject' ? request.userId : null,
+          rejectedByAdminId: action === 'reject' ? request.adminId : null,
         },
       });
       sendToUser(photo.userId, 'photo_reviewed', { photoId, status: action === 'approve' ? 'approved' : 'rejected' });
@@ -79,7 +79,7 @@ export default async function moderationRoutes(fastify: FastifyInstance) {
   // Appeals — a user can ask for a second look at a rejected photo (see POST
   // /profile/photos/:photoId/appeal). Separate queue from the main Photos tab since it's a
   // fundamentally different question ("was the human/model wrong?" vs. "does this need one").
-  fastify.get('/appeals', { preHandler: [authenticate, requireAdmin] }, async (request, reply) => {
+  fastify.get('/appeals', { preHandler: [authenticateAdmin, requirePermission('moderation')] }, async (request, reply) => {
     try {
       const { status } = request.query as { status?: string };
 
@@ -109,7 +109,7 @@ export default async function moderationRoutes(fastify: FastifyInstance) {
     }
   });
 
-  fastify.post('/appeals/:photoId/action', { preHandler: [authenticate, requireAdmin] }, async (request, reply) => {
+  fastify.post('/appeals/:photoId/action', { preHandler: [authenticateAdmin, requirePermission('moderation')] }, async (request, reply) => {
     try {
       const { photoId } = request.params as { photoId: string };
       const { action } = request.body as { action: 'approve' | 'deny' };
@@ -130,7 +130,7 @@ export default async function moderationRoutes(fastify: FastifyInstance) {
         where: { id: photoId },
         data: {
           appealStatus: action === 'approve' ? 'approved' : 'denied',
-          appealReviewedById: request.userId,
+          appealReviewedById: request.adminId,
           appealReviewedAt: new Date(),
           // Approving the appeal is the whole point of it — the photo goes live. Denying
           // leaves moderationStatus exactly as it was (still rejected), but this review *is*
@@ -138,7 +138,7 @@ export default async function moderationRoutes(fastify: FastifyInstance) {
           // for a further appeal (see rejectedByAdminId's role in POST /profile/photos/:id/appeal).
           ...(action === 'approve'
             ? { moderationStatus: 'approved' as const }
-            : { rejectedByAdminId: request.userId }),
+            : { rejectedByAdminId: request.adminId }),
         },
       });
 
@@ -159,7 +159,7 @@ export default async function moderationRoutes(fastify: FastifyInstance) {
   // fixes only apply to new uploads by default. Rejects are marked, not deleted (same as the
   // manual reject action, see /photos/:photoId/action) so an appeal has something to review;
   // anything landing on "pending" goes to the review queue instead.
-  fastify.post('/rescan', { preHandler: [authenticate, requireAdmin] }, async (request, reply) => {
+  fastify.post('/rescan', { preHandler: [authenticateAdmin, requirePermission('moderation')] }, async (request, reply) => {
     try {
       // Used to run every classification inline in this request — each one is 5-12s of
       // blocking CPU work with no native/GPU acceleration here, and looping that over 200+

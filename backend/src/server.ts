@@ -21,6 +21,7 @@ import reportRoutes from './routes/report';
 import blockRoutes from './routes/block';
 import accountRoutes from './routes/account';
 import verificationRoutes from './routes/verification';
+import adminAuthRoutes from './routes/admin-auth';
 import adminToolsRoutes from './routes/admin-tools';
 import moderationRoutes from './routes/moderation';
 import diagnosticsRoutes from './routes/diagnostics';
@@ -109,10 +110,10 @@ async function registerPlugins() {
   });
 
   // Static admin site (login + report moderation) — see public/admin/. Wrapped in its own
-  // plugin encapsulation so `requireBasicAuth` (an outer gate on top of the existing per-account
-  // isAdmin JWT check every real admin action already requires — see middleware/auth.ts's
-  // requireAdmin) applies to every request for anything under /admin/, including the bare HTML
-  // shell, before a member of the public can even see that an admin login page exists.
+  // plugin encapsulation so `requireBasicAuth` (an outer gate on top of the AdminUser
+  // login/permission check every real admin action already requires — see
+  // middleware/adminAuth.ts) applies to every request for anything under /admin/, including the
+  // bare HTML shell, before a member of the public can even see that an admin login page exists.
   await fastify.register(async (instance) => {
     instance.addHook('onRequest', requireBasicAuth);
     await instance.register(fastifyStatic, {
@@ -137,16 +138,17 @@ async function registerRoutes() {
   await fastify.register(accountRoutes);
   await fastify.register(verificationRoutes, { prefix: '/verification' });
 
-  // Both of these route files are admin-only in their entirety (unlike report.ts/verification.ts,
-  // which mix public user-facing routes with a couple of admin sub-paths — those get
-  // `requireBasicAuth` added directly to just their admin routes' preHandler chain instead), so
-  // the same outer Basic Auth gate used for the static /admin/ site can wrap the whole
-  // registration here.
-  await fastify.register(async (instance) => {
-    instance.addHook('onRequest', requireBasicAuth);
-    await instance.register(adminToolsRoutes, { prefix: '/admin-tools' });
-    await instance.register(moderationRoutes, { prefix: '/moderation' });
-  });
+  // Deliberately NOT wrapped in requireBasicAuth (unlike the static /admin/ site above) — every
+  // route in all three of these files already requires a valid AdminUser Bearer token
+  // (authenticateAdmin, see middleware/adminAuth.ts), and a single HTTP request can only carry
+  // one Authorization header. A browser's fetch() call that explicitly sets
+  // `Authorization: Bearer <token>` can never also satisfy a Basic Auth check on that same
+  // request, so stacking both on the same route is a contradiction, not extra security — Basic
+  // Auth's job is done once it's gated the static site and admin-auth.ts's POST /login (the only
+  // route here reachable without already having a Bearer token).
+  await fastify.register(adminAuthRoutes, { prefix: '/admin-auth' });
+  await fastify.register(adminToolsRoutes, { prefix: '/admin-tools' });
+  await fastify.register(moderationRoutes, { prefix: '/moderation' });
 
   await fastify.register(diagnosticsRoutes, { prefix: '/diagnostics' });
 

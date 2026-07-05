@@ -1,12 +1,13 @@
-// Creates a standalone admin account — not a real dating profile. Reuses the same User table
-// and login flow (email/password -> /auth/login) as everything else, since that's already the
-// tested/hardened path (see requireAdmin in middleware/auth.ts), but isActive/discoverable are
-// both forced to false so this account can never surface anywhere in the app itself (discovery,
-// other users' profile views) — it exists purely to sign into the admin site at /admin/.
+// Bootstraps the very first admin account directly in the database, bypassing the API — there's
+// a chicken-and-egg problem otherwise: routes/admin-auth.ts's POST /admin-auth/team (which is how
+// every admin after the first one gets created) requires an existing super admin to call it.
+// Every admin created this way is a super admin, since nobody else exists yet to grant them a
+// narrower set of permissions — use the admin site's Team tab afterward to invite the rest of the
+// team with whatever specific permissions they actually need.
 //
 // Run with: npm run create-admin -- admin@example.com [password]
-// If that email already exists, this just resets its password and (re)promotes it to admin
-// instead of failing — safe to re-run.
+// Safe to re-run against an existing email — resets the password and re-confirms super admin
+// rather than failing.
 
 import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
@@ -26,35 +27,27 @@ async function main() {
 
   const passwordHash = await hashPassword(password);
 
-  const user = await prisma.user.upsert({
+  const admin = await prisma.adminUser.upsert({
     where: { email },
     update: {
       passwordHash,
-      isAdmin: true,
-      isActive: false,
-      discoverable: false,
-      emailVerified: true,
+      isSuperAdmin: true,
+      isActive: true,
     },
     create: {
       email,
-      // Unique placeholder — this account never receives a real phone call/OTP, the field just
-      // exists because User.phone is required by the schema for every row.
-      phone: `+1000${crypto.randomInt(1000000, 9999999)}`,
       passwordHash,
-      dateOfBirth: new Date('1990-01-01'),
-      genderIdentity: 'other',
-      femAttestationAccepted: true,
-      femAttestationAcceptedAt: new Date(),
-      emailVerified: true,
-      isAdmin: true,
-      isActive: false,
-      discoverable: false,
+      isSuperAdmin: true,
+      // Left empty deliberately — isSuperAdmin already bypasses the permissions check entirely
+      // (see requirePermission in middleware/adminAuth.ts), so populating this would just be a
+      // second, potentially stale source of truth for "this admin can do everything."
+      permissions: [],
     },
   });
 
-  console.log(`Admin account ready: ${user.email}`);
+  console.log(`Admin account ready: ${admin.email} (super admin)`);
   console.log(`Password: ${password}`);
-  console.log('Sign in at /admin/ (or POST /auth/login) with these — save the password now, it is not stored anywhere retrievable.');
+  console.log('Sign in at /admin/ with these — save the password now, it is not stored anywhere retrievable.');
 }
 
 main()

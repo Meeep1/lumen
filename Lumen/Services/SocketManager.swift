@@ -21,7 +21,7 @@ class SocketManager: ObservableObject {
 
     // Keep in sync with APIService.baseURL. Production uses wss:// (TLS, via Caddy) not ws://.
     #if DEBUG
-    private let socketURL = "ws://192.168.68.59:3000/ws"
+    private var socketURL: String { BackendEnvironmentStore.shared.current.socketURL }
     #else
     private let socketURL = "wss://lumenfem.app/ws"
     #endif

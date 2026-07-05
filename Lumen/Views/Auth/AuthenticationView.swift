@@ -13,6 +13,15 @@ struct AuthenticationView: View {
     @State private var appleSignupInfo: AppleSignupInfo?
     @State private var appleErrorMessage: String?
 
+    // Hidden switch between local dev and production, for fast manual testing against either
+    // server without rebuilding — see BackendEnvironment.swift. Doesn't exist in Release builds.
+    #if DEBUG
+    @State private var logoTapCount = 0
+    @State private var lastLogoTapTime = Date.distantPast
+    @State private var showEnvironmentPicker = false
+    @ObservedObject private var environmentStore = BackendEnvironmentStore.shared
+    #endif
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -27,6 +36,20 @@ struct AuthenticationView: View {
                             .resizable()
                             .frame(width: 100, height: 100)
                             .foregroundStyle(Theme.primaryGradient)
+                            #if DEBUG
+                            // 5 taps within 1.5s of each other unlocks the environment picker —
+                            // deliberately not documented UI, just a fast escape hatch for testing.
+                            .onTapGesture {
+                                let now = Date()
+                                if now.timeIntervalSince(lastLogoTapTime) > 1.5 { logoTapCount = 0 }
+                                lastLogoTapTime = now
+                                logoTapCount += 1
+                                if logoTapCount >= 5 {
+                                    logoTapCount = 0
+                                    showEnvironmentPicker = true
+                                }
+                            }
+                            #endif
 
                         Text("Lumen")
                             .font(.system(size: 48, weight: .bold, design: .rounded))
@@ -34,6 +57,12 @@ struct AuthenticationView: View {
                         Text("Fem-for-fem dating")
                             .font(.title3)
                             .foregroundStyle(.secondary)
+
+                        #if DEBUG
+                        Text("[DEBUG] \(environmentStore.current.displayName)")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                        #endif
                     }
 
                     Spacer()
@@ -83,6 +112,22 @@ struct AuthenticationView: View {
             .navigationDestination(item: $appleSignupInfo) { info in
                 SignupView(appleIdentityToken: info.identityToken, prefillEmail: info.email)
             }
+            #if DEBUG
+            .confirmationDialog(
+                "Backend Environment",
+                isPresented: $showEnvironmentPicker,
+                titleVisibility: .visible
+            ) {
+                ForEach(BackendEnvironment.allCases) { env in
+                    Button(env == environmentStore.current ? "✓ \(env.displayName)" : env.displayName) {
+                        environmentStore.current = env
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Currently: \(environmentStore.current.baseURL)\nRestart the app after switching so open connections pick it up.")
+            }
+            #endif
         }
     }
 

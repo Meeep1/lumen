@@ -12,7 +12,7 @@ struct SettingsView: View {
 
     // Keep in sync with APIService.baseURL / SocketManager.socketURL.
     #if DEBUG
-    private let legalBaseURL = "http://192.168.68.59:3000"
+    private var legalBaseURL: String { BackendEnvironmentStore.shared.current.baseURL }
     #else
     private let legalBaseURL = "https://lumenfem.app"
     #endif

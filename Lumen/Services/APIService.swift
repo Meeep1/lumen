@@ -39,11 +39,12 @@ extension Notification.Name {
 class APIService {
     static let shared = APIService()
     
-    // Debug builds hit local dev (Simulator can use localhost; a physical device needs your
-    // Mac's LAN IP reachable from wherever `npm run dev` is bound). Release builds hit
-    // production directly — no manual flip needed before archiving for TestFlight/App Store.
+    // Debug builds read from BackendEnvironmentStore (flippable at runtime via a hidden gesture
+    // on the login screen — see AuthenticationView) so local dev vs. production can be switched
+    // without rebuilding. Release builds hit production directly, no toggle — no manual flip
+    // needed before archiving for TestFlight/App Store.
     #if DEBUG
-    private let baseURL = "http://192.168.68.59:3000"
+    private var baseURL: String { BackendEnvironmentStore.shared.current.baseURL }
     #else
     private let baseURL = "https://lumenfem.app"
     #endif

@@ -1,7 +1,8 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 
 /// A second, outer gate in front of the admin panel — separate from (and in addition to) the
-/// per-account `requireAdmin` JWT check every admin action already goes through. Without this,
+/// AdminUser login/permission check every admin action already goes through (see
+/// middleware/adminAuth.ts). Without this,
 /// anyone who found `/admin/` (a guessable, undocumented-but-discoverable path) could load the
 /// real Lumen-branded admin login screen and start probing it, even though they could never
 /// actually authenticate past it. This stops that at the door: a plain HTTP Basic Auth prompt,

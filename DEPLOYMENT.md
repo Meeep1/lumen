@@ -265,6 +265,63 @@ places to look.
 
 ---
 
+## 9.5. Create your admin and test accounts
+
+Two separate things, and neither happens automatically — a fresh database has zero rows in
+either table.
+
+### Admin accounts (staff who can access `/admin/`)
+
+Admin logins are their own system, entirely unrelated to dating-app user accounts (see
+`backend/src/routes/admin-auth.ts` and the `AdminUser` model in `schema.prisma`) — a leaked or
+compromised user JWT can never be used against any admin route, and vice versa. Each admin has
+specific permissions (`moderation`, `reports`, `verification`, `testTools`) rather than a single
+all-or-nothing flag, plus an optional `isSuperAdmin` that grants everything and the ability to
+manage other admins.
+
+Bootstrap the very first one directly — there's a chicken-and-egg problem otherwise, since every
+admin after this one is invited *through* the admin panel's Team tab, which needs an existing
+admin to do that:
+
+```bash
+cd ~/lumen/backend
+npm run create-admin -- you@lumenfem.app
+```
+
+This prints a generated password — save it, then sign in at `https://lumenfem.app/admin/` (you'll
+hit the Basic Auth prompt first, same credentials as `.env`'s
+`ADMIN_BASIC_AUTH_USER`/`PASSWORD`, then the real admin login). This first account is always a
+super admin, since nobody else exists yet to grant it anything narrower.
+
+Invite the rest of the team from the **Team** tab in the admin panel itself (only visible to
+super admins) — pick exactly which permissions each person actually needs rather than giving
+everyone full access. No script needed for this part once the first admin exists.
+
+### The App Store review / test account
+
+The account you hand to Apple in App Store Connect's review notes. It's not a normal account —
+every real login resets it to a blank, pre-onboarding state (see
+`backend/src/utils/testAccount.ts`), so a reviewer always sees the full signup→onboarding→
+discovery flow, never whatever a previous review session left behind.
+
+```bash
+# Seed the fake profiles first — the test account needs these for Discovery/Likes You content
+npm run seed
+
+# Then create the account itself
+npm run create-test-account -- review@lumenfem.app
+```
+
+Password defaults to `LumenReview2026` if you don't pass one explicitly — deliberately simple
+rather than randomly generated, since an Apple reviewer has to type it in by hand and this account
+can never hold anything sensitive anyway (every login wipes it back to blank). Give both the
+email and this password to Apple in App Store Connect's "App Review Information" → "Sign-In
+Information" fields.
+
+Both scripts are safe to re-run anytime — they upsert rather than fail on an existing email.
+
+---
+
 ## 10. Point the iOS app at production
 
 **Done.** All three spots that referenced the dev LAN IP are now build-configuration-based
@@ -277,6 +334,14 @@ hitting local dev and Release builds (TestFlight/App Store archives) automatical
   since production's WebSocket is behind Caddy's TLS same as everything else).
 - `Lumen/Views/Profile/SettingsView.swift` — new shared `legalBaseURL` constant, used by all three
   legal-page `Link(destination:)` URLs.
+
+**For fast manual testing against either server without rebuilding:** Debug builds only (this
+doesn't exist in Release/TestFlight/App Store builds at all — see `Lumen/Services/
+BackendEnvironment.swift`) — on the login screen, tap the heart logo 5 times within 1.5 seconds
+to bring up a picker between Local and Production. Your choice persists across app launches via
+`UserDefaults`, and a small `[DEBUG] Local`/`[DEBUG] Production` caption under the tagline always
+shows which one is currently active. Restart the app after switching so any already-open
+WebSocket connection picks up the new server.
 
 ---
 
