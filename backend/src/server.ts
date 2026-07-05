@@ -24,7 +24,6 @@ import verificationRoutes from './routes/verification';
 import adminToolsRoutes from './routes/admin-tools';
 import moderationRoutes from './routes/moderation';
 import diagnosticsRoutes from './routes/diagnostics';
-import { preloadModerationModel } from './utils/storage';
 import { requireBasicAuth } from './middleware/basicAuth';
 
 // Import socket handler
@@ -166,10 +165,12 @@ async function start() {
     await registerPlugins();
     await registerRoutes();
 
-    // Prisma and ioredis both connect lazily on first query, and the NSFW model takes ~1-2s to
-    // load — without this, those costs land on whichever real request happens to be first
-    // (login, or the first photo upload) instead of being paid once here at boot.
-    await Promise.all([prisma.user.count(), redis.ping(), preloadModerationModel()]);
+    // Prisma and ioredis both connect lazily on first query — pay that cost once here at boot
+    // instead of on whichever real request happens to be first. The NSFW model used to be
+    // preloaded here too, but photo moderation moved to a separate worker process (see
+    // src/worker.ts / ROADMAP.md 2.7) specifically so this process never has to load or run it —
+    // loading the same heavy model in both processes was fighting over RAM/CPU for nothing.
+    await Promise.all([prisma.user.count(), redis.ping()]);
 
     const PORT = parseInt(process.env.PORT || '3000');
     await fastify.listen({ port: PORT, host: '0.0.0.0' });

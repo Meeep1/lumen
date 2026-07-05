@@ -126,9 +126,18 @@ production and vice versa.
 | `ADMIN_BASIC_AUTH_USER` / `ADMIN_BASIC_AUTH_PASSWORD` | New values, different from dev — this is what hides `/admin/` from the public |
 | `APNS_KEY_ID` / `APNS_TEAM_ID` | Same as dev (`BB92QH6224` / `X64DVU8KXZ`) — it's the same Apple key regardless of environment |
 | `APNS_PRODUCTION` | **`false` for TestFlight-only, `true` only once actually on the App Store.** Apple's rule is about which *provisioning profile* signed the installed build, not which server it talks to — a development-signed build always needs `sandbox` (i.e. `false`), and Apple only switches a build to the production APNs gateway once it's signed for real distribution. Get this wrong and push notifications silently fail for everyone. |
-| `SMTP_*` | Same as dev (`meeep.xyz` / Purelymail credentials) |
+| `SMTP_HOST` / `SMTP_PORT` | `smtp.purelymail.com` / `587` (same as dev) |
+| `SMTP_USER` / `EMAIL_FROM_ADDRESS` | `noreply@lumenfem.app` — now that the real domain is set up in Purelymail, production OTP emails should come from it, not the `meeep.xyz` dev/test mailbox |
+| `SMTP_PASSWORD` | A **new** Purelymail App Password scoped to `noreply@lumenfem.app` — same process as the `meeep.xyz` one: Purelymail dashboard → that mailbox → App Passwords → generate. Don't reuse the `meeep.xyz` mailbox's password; it's a different mailbox. |
+| `EMAIL_FROM_NAME` | `Lumen` (same as dev) |
 | `RATE_LIMIT_MAX` | `100` (the original default — dev bumped this to 500 for convenience during testing; production should be tighter) |
 | `APPLE_BUNDLE_ID` | `com.lumenfem.dating` |
+
+**Before OTP emails will actually send from `lumenfem.app`**, Purelymail needs the domain's MX,
+SPF, and DKIM records added wherever `lumenfem.app`'s DNS is managed (same place as the A record
+in step 6) — check Purelymail's dashboard for that domain, it shows you the exact records to
+add. Without these, mail either bounces or lands in spam even with a valid App Password. Send
+yourself a test OTP once deployed to confirm it actually arrives.
 
 Copy your APNs key onto the server too (don't commit it — see `.gitignore`'s `*.p8` rule):
 ```bash
@@ -174,19 +183,47 @@ sudo apt update
 sudo apt install -y caddy
 ```
 
-Edit `/etc/caddy/Caddyfile` (replace the whole file):
-```
+Replace the whole Caddyfile (this overwrites it non-interactively — no editor needed).
+**Use `127.0.0.1:3000`, not `localhost:3000`** — the app only binds IPv4 (`fastify.listen({ host:
+'0.0.0.0' })`), and `localhost` can resolve to the IPv6 loopback (`::1`) first depending on the
+system, which then fails to connect even once the app is actually running:
+```bash
+sudo tee /etc/caddy/Caddyfile > /dev/null <<'EOF'
 lumenfem.app {
-    reverse_proxy localhost:3000
+    reverse_proxy 127.0.0.1:3000
 }
+EOF
 ```
 
 ```bash
 sudo systemctl restart caddy
+sudo systemctl enable caddy
 ```
 
-That's it — Caddy will automatically request and renew a Let's Encrypt certificate for
-`lumenfem.app` the moment it can complete the HTTP challenge (i.e., once DNS is pointed at it).
+Confirm it actually picked up the config and is running:
+```bash
+sudo systemctl status caddy --no-pager
+```
+Look for `active (running)`. If it's not, check the logs:
+```bash
+sudo journalctl -u caddy --no-pager -n 50
+```
+
+Once DNS for `lumenfem.app` is actually pointing at this server (step 6), Caddy requests and
+auto-renews a real Let's Encrypt certificate the moment it can complete the HTTP challenge — no
+further action needed. You can watch it happen live:
+```bash
+sudo journalctl -u caddy -f
+```
+(`Ctrl+C` to stop following.) Look for a line mentioning `certificate obtained successfully`.
+
+**Expected at this point:** if you check the logs before completing step 8, you'll see errors
+like `dial tcp 127.0.0.1:3000: connect: connection refused` with a `502` status — that's just
+Caddy correctly working (TLS and all) but having nothing to proxy *to* yet, since the app itself
+isn't started until step 8. Not a bug. You may also see scan traffic in the logs (requests for
+things like `/.vscode/sftp.json` from user agents like `l9scan`/`leakix.net`) within minutes of
+the domain going live — that's just internet-wide vulnerability scanners probing every new
+public IP/domain, not anything specific to you, and safe to ignore.
 
 ---
 
