@@ -29,6 +29,10 @@ class SocketManager: ObservableObject {
     @Published var isConnected = false
     @Published var incomingMessages: [Message] = []
     @Published var typingUsers: [String: Bool] = [:]
+    /// Fires when the *other* participant in a match reads messages you sent them — keyed by
+    /// matchId so ChatView can react only to its own match. Not an array/log, just the latest
+    /// event per match, since all a chat view needs is "mark my sent messages read now."
+    @Published var lastReadReceipt: (matchId: String, readBy: String, at: Date)?
 
     private var task: URLSessionWebSocketTask?
     private var shouldReconnect = false
@@ -176,7 +180,19 @@ class SocketManager: ObservableObject {
             DispatchQueue.main.async { self.typingUsers[typing.userId] = typing.isTyping }
 
         case "messages_read":
-            break // Chat view doesn't currently render per-message read state from the socket feed.
+            struct MessagesReadPayload: Codable { let matchId: String; let readBy: String }
+            guard let read = try? decoder.decode(MessagesReadPayload.self, from: payloadData) else { return }
+            DispatchQueue.main.async {
+                self.lastReadReceipt = (matchId: read.matchId, readBy: read.readBy, at: Date())
+            }
+
+        case "report_reviewed":
+            DispatchQueue.main.async {
+                self.showLocalNotification(
+                    title: "Report Reviewed",
+                    body: "Thanks for reporting — our team has reviewed it and taken appropriate action."
+                )
+            }
 
         case "photo_reviewed":
             struct PhotoReviewedPayload: Codable { let photoId: String; let status: String }

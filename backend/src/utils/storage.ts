@@ -52,6 +52,27 @@ export async function uploadPhoto(
   return relativePath;
 }
 
+/// Chat images (see routes/match.ts's POST /:matchId/messages/photo), kept in their own
+/// `chat/{matchId}/` tree rather than reusing `uploadPhoto()`'s `photos/{userId}/` — different
+/// lifecycle (tied to a match, not a profile) and, per product decision, these are **not** run
+/// through moderateImage() at all: profile photos are shown to strangers browsing Discovery,
+/// chat images are only ever seen by someone you've already mutually matched and exchanged
+/// several messages with (see IMAGE_MESSAGE_UNLOCK_THRESHOLD), which is a meaningfully different
+/// trust/exposure level. Revisit if that assumption stops holding.
+export async function uploadChatImage(buffer: Buffer, matchId: string): Promise<string> {
+  const matchDir = path.join(UPLOADS_DIR, 'chat', matchId);
+  if (!fs.existsSync(matchDir)) {
+    fs.mkdirSync(matchDir, { recursive: true });
+  }
+
+  const filename = `${crypto.randomUUID()}.jpg`;
+  fs.writeFileSync(path.join(matchDir, filename), buffer);
+
+  const relativePath = `chat/${matchId}/${filename}`;
+  console.log(`📸 Chat image saved: ${relativePath}`);
+  return relativePath;
+}
+
 export async function getPresignedUrl(key: string): Promise<string> {
   // In local mode, return a local file URL
   // The actual file will be served by the /uploads endpoint

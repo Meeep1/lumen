@@ -133,7 +133,11 @@ export const discoveryFiltersSchema = z.object({
 
 export const sendMessageSchema = z.object({
   content: z.string().max(2000).optional(),
-  imageUrl: z.string().url().optional(),
+  // Not `.url()` — every photo URL in this app (profile photos, chat images alike) is a
+  // host-relative path from getPresignedUrl()/uploadChatImage() (e.g. "/uploads/chat/..."), and
+  // the client always resolves it against its own baseURL via APIService.imageURL(for:). A
+  // relative path correctly fails a `.url()` check, which would reject every real image message.
+  imageUrl: z.string().min(1).optional(),
 }).refine((data) => data.content || data.imageUrl, {
   message: 'Either content or imageUrl must be provided',
 });

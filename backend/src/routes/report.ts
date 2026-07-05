@@ -1,8 +1,10 @@
 import { FastifyInstance } from 'fastify';
-import { prisma } from '../server';
+import { prisma, redis } from '../server';
 import { authenticate } from '../middleware/auth';
 import { authenticateAdmin, requirePermission } from '../middleware/adminAuth';
 import { reportSchema, zodErrorMessage } from '../utils/validation';
+import { sendToUser } from '../socket/handlers';
+import { sendPushNotification } from '../utils/apns';
 
 export default async function reportRoutes(fastify: FastifyInstance) {
   // Create a report
@@ -143,6 +145,33 @@ export default async function reportRoutes(fastify: FastifyInstance) {
             isActive: false,
           },
         });
+      }
+
+      // Let the reporter know their report wasn't ignored — deliberately no mention of what
+      // action (if any) was taken against the reported user, since that's private to them; this
+      // is purely "we looked at this," matching the same no-preference-toggle pattern as photo
+      // moderation outcomes (photo_reviewed/photo_appeal_reviewed in socket/handlers.ts) rather
+      // than a spammy per-report-detail notification.
+      const isReporterOnline = await redis.get(`user:${report.reporterId}:online`);
+      if (isReporterOnline) {
+        sendToUser(report.reporterId, 'report_reviewed', { reportId });
+      } else {
+        const reporter = await prisma.user.findUnique({
+          where: { id: report.reporterId },
+          select: { pushToken: true },
+        });
+        if (reporter?.pushToken) {
+          const result = await sendPushNotification(reporter.pushToken, {
+            title: 'Report Reviewed',
+            body: "Thanks for reporting — our team has reviewed it and taken appropriate action.",
+          });
+          if (!result.ok && result.reason === 'invalid-token') {
+            await prisma.user.update({
+              where: { id: report.reporterId },
+              data: { pushToken: null, pushPlatform: null },
+            });
+          }
+        }
       }
 
       return reply.send({ message: 'Action taken on report' });

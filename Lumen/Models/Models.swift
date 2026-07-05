@@ -260,6 +260,11 @@ struct SwipeResult: Codable {
     let matchedUser: MatchedUser?
 }
 
+struct UndoSwipeResult: Codable {
+    let undone: Bool
+    let swipedId: String
+}
+
 // MARK: - Likes You Models
 
 struct LikeReceived: Codable, Identifiable {
@@ -309,10 +314,24 @@ struct Match: Codable, Identifiable {
     let cityDisplay: String?
     let isVerified: Bool
     let photo: String?
+    let isOnline: Bool?
+    let lastActiveAt: Date?
     let lastMessage: LastMessage?
     let matchedAt: Date
-    
+
     var id: String { matchId }
+
+    /// "Active now" / "Active 2h ago" — matches common chat-app phrasing. Nil only means the
+    /// backend response is missing the field entirely (e.g. an older cached response), not that
+    /// activity is unknown, so callers can just skip rendering rather than showing "Active never".
+    var activityStatusText: String? {
+        if isOnline == true { return "Active now" }
+        guard let lastActiveAt else { return nil }
+
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return "Active " + formatter.localizedString(for: lastActiveAt, relativeTo: Date())
+    }
 }
 
 struct LastMessage: Codable {

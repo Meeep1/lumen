@@ -159,9 +159,20 @@ struct MatchRowView: View {
 
             Spacer()
 
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+            VStack(spacing: 4) {
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+
+                // Only shown while offline — the avatar's green dot already conveys "online now"
+                // on its own, so showing both would just be saying the same thing twice.
+                if match.isOnline != true, let activityStatusText = match.activityStatusText {
+                    Text(activityStatusText)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+            }
         }
         .padding(.vertical, 8)
     }
@@ -194,6 +205,14 @@ struct MatchRowView: View {
         }
         .frame(width: 60, height: 60)
         .clipShape(Circle())
+        .overlay(alignment: .bottomTrailing) {
+            if match.isOnline == true {
+                Circle()
+                    .fill(.green)
+                    .frame(width: 14, height: 14)
+                    .overlay(Circle().stroke(Color.lumenBackground, lineWidth: 2))
+            }
+        }
     }
 }
 

@@ -148,6 +148,41 @@ export default async function swipeRoutes(fastify: FastifyInstance) {
     }
   });
 
+  // Undo your own most recent swipe — deliberately only the single most recent one (no history
+  // of undos, no "undo twice in a row" support), and only if it hasn't already resulted in a
+  // match: a match notifies the other person immediately (see notifyUser above), so silently
+  // deleting one after the fact would leave them thinking they still have a match that's just
+  // vanished from under them. A pass, or a like that hasn't been reciprocated yet, is safe to
+  // undo since nobody else has seen any effect of it.
+  fastify.delete('/last', { preHandler: authenticate }, async (request, reply) => {
+    try {
+      const lastSwipe = await prisma.swipe.findFirst({
+        where: { swiperId: request.userId },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (!lastSwipe) {
+        return reply.status(404).send({ error: 'Nothing to undo' });
+      }
+
+      const [userAId, userBId] = [request.userId!, lastSwipe.swipedId].sort();
+      const existingMatch = await prisma.match.findUnique({
+        where: { userAId_userBId: { userAId, userBId } },
+      });
+
+      if (existingMatch) {
+        return reply.status(400).send({ error: "This already resulted in a match and can't be undone" });
+      }
+
+      await prisma.swipe.delete({ where: { id: lastSwipe.id } });
+
+      return reply.send({ undone: true, swipedId: lastSwipe.swipedId });
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: 'Failed to undo swipe' });
+    }
+  });
+
   // Get users who liked me
   fastify.get('/liked-me', { preHandler: authenticate }, async (request, reply) => {
     try {

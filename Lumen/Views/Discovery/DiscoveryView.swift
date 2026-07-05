@@ -9,6 +9,11 @@ struct DiscoveryView: View {
     @State private var matchedProfile: DiscoveryProfile?
     @State private var matchTextPop = false
     @State private var matchPhotoPop = false
+    /// Only ever the single most recent swipe, and only set when it didn't match (the backend
+    /// rejects undoing a match outright — see swipe.ts's DELETE /swipe/last — so there's no
+    /// point letting the button look tappable when it would just come back as an error).
+    @State private var canUndoLastSwipe = false
+    @State private var undoErrorMessage: String?
 
     // Filters
     @State private var filters = DiscoveryFilters()
@@ -38,6 +43,14 @@ struct DiscoveryView: View {
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
+            .customAlert(
+                isPresented: Binding(
+                    get: { undoErrorMessage != nil },
+                    set: { if !$0 { undoErrorMessage = nil } }
+                ),
+                title: "Couldn't Undo",
+                message: undoErrorMessage ?? ""
+            )
             .sheet(isPresented: $showingFilters) {
                 FilterSheet(filters: $filters) {
                     Task {
@@ -71,6 +84,22 @@ struct DiscoveryView: View {
                 }
                 .buttonStyle(LumenPressableStyle())
                 .shadow(color: .pink.opacity(0.25), radius: 6, y: 3)
+
+                if canUndoLastSwipe {
+                    Button {
+                        Task { await undoLastSwipe() }
+                    } label: {
+                        Image(systemName: "arrow.uturn.backward")
+                            .font(.subheadline.weight(.semibold))
+                            .padding(10)
+                            .background(Color.lumenSurface)
+                            .foregroundColor(.primary)
+                            .clipShape(Circle())
+                            .overlay(Circle().stroke(Color.pink.opacity(0.15), lineWidth: 1))
+                    }
+                    .buttonStyle(LumenPressableStyle())
+                    .transition(.scale.combined(with: .opacity))
+                }
 
                 filterPill(title: "Age", value: filters.minAge != nil || filters.maxAge != nil
                     ? "\(filters.minAge ?? 18)-\(filters.maxAge ?? 100)" : nil)
@@ -192,6 +221,9 @@ struct DiscoveryView: View {
                 PushNotificationManager.shared.requestPermissionIfNeeded()
             }
 
+            // Only a swipe that didn't match can be undone — see swipe.ts's DELETE /swipe/last.
+            canUndoLastSwipe = !result.matched
+
             // Move to next profile
             withAnimation {
                 currentIndex += 1
@@ -203,6 +235,24 @@ struct DiscoveryView: View {
             }
         } catch {
             print("Swipe error: \(error)")
+        }
+    }
+
+    private func undoLastSwipe() async {
+        guard currentIndex > 0 else { return }
+
+        do {
+            _ = try await APIService.shared.undoLastSwipe()
+            withAnimation {
+                currentIndex -= 1
+            }
+            // Deliberately not chained — this only ever undoes the single swipe the button
+            // just appeared for. Rehiding it also means a mis-tap can't retry against a swipe
+            // the server no longer has (already deleted).
+            canUndoLastSwipe = false
+        } catch {
+            canUndoLastSwipe = false
+            undoErrorMessage = error.localizedDescription
         }
     }
 

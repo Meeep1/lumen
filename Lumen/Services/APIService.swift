@@ -394,6 +394,50 @@ class APIService {
         return try decoder.decode(Photo.self, from: data)
     }
 
+    /// Uploads and sends a chat image in one call — mirrors `uploadPhoto`'s raw multipart
+    /// construction (same reason: this is a file part, not a JSON body), posting to
+    /// POST /matches/:matchId/messages/photo, which creates the Message server-side and
+    /// broadcasts it the same way a text message is, so there's no separate "now send it" step.
+    func sendChatImage(matchId: String, imageData: Data) async throws -> Message {
+        guard let url = URL(string: "\(baseURL)/matches/\(matchId)/messages/photo") else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+
+        let boundary = "Boundary-\(UUID().uuidString)"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        if let token = KeychainManager.shared.getAccessToken() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        var body = Data()
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"chat.jpg\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: image/jpeg\r\n\r\n".data(using: .utf8)!)
+        body.append(imageData)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        request.httpBody = body
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        if httpResponse.statusCode >= 400 {
+            if let errorResponse = try? decoder.decode(ErrorResponse.self, from: data) {
+                throw APIError.serverError(errorResponse.error)
+            }
+            throw APIError.serverError("Server error: \(httpResponse.statusCode)")
+        }
+
+        struct MessageResponse: Codable { let message: Message }
+        return try decoder.decode(MessageResponse.self, from: data).message
+    }
+
     func deletePhoto(photoId: String) async throws {
         struct Response: Codable { let message: String }
         let _: Response = try await request(
@@ -526,6 +570,14 @@ class APIService {
         )
     }
     
+    /// Undoes only the caller's own most recent swipe, and only if it hasn't already resulted
+    /// in a match — see the backend route's own comment for why. Throws `APIError.serverError`
+    /// (via the generic request path's non-2xx handling) with the backend's message if it's
+    /// already matched or there's nothing to undo, so callers can show that directly.
+    func undoLastSwipe() async throws -> UndoSwipeResult {
+        return try await request(endpoint: "/swipe/last", method: "DELETE")
+    }
+
     func getLikedMeProfiles() async throws -> [LikeReceived] {
         struct Response: Codable {
             let profiles: [LikeReceived]
