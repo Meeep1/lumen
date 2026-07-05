@@ -5,7 +5,19 @@
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import * as tf from '@tensorflow/tfjs';
+// @tensorflow/tfjs-node, not plain @tensorflow/tfjs — same API, but backed by compiled native
+// TensorFlow (a prebuilt binary fetched at install time) instead of a pure-JS/CPU backend.
+// Benchmarked directly against this exact model+code path: ~9.7s/photo on plain tfjs vs. ~54ms
+// on tfjs-node — about 180x, with byte-identical predictions (confirmed on both this project's
+// dev Mac, arm64, and the linux x64 production server). nsfwjs only declares `@tensorflow/tfjs`
+// as a peerDependency rather than bundling its own copy, so it operates against whatever backend
+// this import registers as active in the shared global TF engine — no nsfwjs-side changes
+// needed. This is very likely the real fix for the BullMQ "Missing lock"/"stalled" errors worked
+// around in worker.ts's lockDuration/stalledInterval: those exist because classification used to
+// block this process's event loop long enough to delay BullMQ's own internal timers, and that's
+// far less likely at ~54ms than it was at ~9.7s. Left the generous lockDuration/stalledInterval
+// in place anyway as harmless headroom, not tied back down now that the root cause has shrunk.
+import * as tf from '@tensorflow/tfjs-node';
 import * as nsfwjs from 'nsfwjs';
 import sharp from 'sharp';
 
