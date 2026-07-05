@@ -53,7 +53,11 @@ final class BackendEnvironmentStore: ObservableObject {
            let saved = BackendEnvironment(rawValue: raw) {
             current = saved
         } else {
-            current = .local
+            // Defaults to production, not local — the server is cheap to iterate on directly
+            // (SSH access, a two-command deploy), so "just build and run" should work without
+            // also needing `npm run dev` running on this Mac. Switch to Local with the same
+            // 5-tap gesture when you specifically want to test against uncommitted local changes.
+            current = .production
         }
     }
 }
