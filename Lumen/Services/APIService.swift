@@ -495,9 +495,17 @@ class APIService {
         return try await request(endpoint: "/verification/status")
     }
 
+    /// Fetches a fresh code the user must hold up in their selfie — call this right before
+    /// opening the camera, not earlier, since it expires after 10 minutes server-side.
+    func getVerificationCode() async throws -> VerificationCodeResponse {
+        return try await request(endpoint: "/verification/code")
+    }
+
     /// Multipart upload, same shape as uploadPhoto(imageData:) — verification selfies aren't
-    /// JSON, they're a file part.
-    func submitVerificationPhoto(imageData: Data) async throws {
+    /// JSON, they're a file part. `code` is sent as a field *before* the file part deliberately:
+    /// @fastify/multipart only exposes non-file fields that arrived earlier in the stream than
+    /// whichever file part `request.file()` is currently parsing.
+    func submitVerificationPhoto(imageData: Data, code: String) async throws {
         guard let url = URL(string: "\(baseURL)/verification/submit") else {
             throw APIError.invalidURL
         }
@@ -513,6 +521,9 @@ class APIService {
         }
 
         var body = Data()
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"code\"\r\n\r\n".data(using: .utf8)!)
+        body.append("\(code)\r\n".data(using: .utf8)!)
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Disposition: form-data; name=\"photo\"; filename=\"selfie.jpg\"\r\n".data(using: .utf8)!)
         body.append("Content-Type: image/jpeg\r\n\r\n".data(using: .utf8)!)

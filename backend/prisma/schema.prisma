@@ -92,6 +92,14 @@ model User {
   // AdminUser's id — not a Prisma relation, same reasoning as Report.reviewedById below.
   verificationReviewedById String?
   verificationReviewedAt   DateTime?
+  // A short-lived random code the app fetches right before opening the camera and requires the
+  // user to hold up in the selfie itself (see verification.ts's GET /code and POST /submit). A
+  // photo pulled from the camera roll or prepared in advance can't have known this code ahead of
+  // time, so it's the cheap alternative to real liveness detection for a still-manual review
+  // queue. Left in place after a submission (not cleared) purely so the admin queue can keep
+  // showing "the code that should be visible in this photo" until the request is reviewed.
+  verificationCode          String?
+  verificationCodeExpiresAt DateTime?
 
   latitude    Float?
   longitude   Float?

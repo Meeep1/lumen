@@ -105,6 +105,13 @@ struct VerificationStatusResponse: Codable {
     let reviewedAt: Date?
 }
 
+/// A short-lived code the user must hold up in their own verification selfie — see
+/// verification.ts's GET /code for why this exists (cheap anti-replay for a manual review queue).
+struct VerificationCodeResponse: Codable {
+    let code: String
+    let expiresAt: Date
+}
+
 struct ProfileUpdate: Codable {
     let bio: String?
     let pronouns: String?

@@ -1,10 +1,46 @@
+import { randomInt } from 'crypto';
 import { FastifyInstance } from 'fastify';
 import { prisma } from '../server';
 import { authenticate } from '../middleware/auth';
 import { authenticateAdmin, requirePermission } from '../middleware/adminAuth';
 import { uploadPhoto, getPresignedUrl } from '../utils/storage';
 
+// Excludes visually-ambiguous characters (0/O, 1/I/L) since a reviewer has to read this back off
+// a photo of it held up to a camera, not copy-paste it.
+const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const CODE_LENGTH = 6;
+const CODE_TTL_MS = 10 * 60 * 1000;
+
+function generateVerificationCode(): string {
+  let code = '';
+  for (let i = 0; i < CODE_LENGTH; i++) {
+    code += CODE_ALPHABET[randomInt(CODE_ALPHABET.length)];
+  }
+  return code;
+}
+
 export default async function verificationRoutes(fastify: FastifyInstance) {
+  // Issue a fresh code the app displays right before opening the camera and requires the user
+  // to hold up in-frame — see the schema comment on User.verificationCode for why this exists.
+  // Called again (overwriting the old code) if the user backs out and restarts, so a stale code
+  // from an abandoned attempt is never still valid.
+  fastify.get('/code', { preHandler: authenticate }, async (request, reply) => {
+    try {
+      const code = generateVerificationCode();
+      const expiresAt = new Date(Date.now() + CODE_TTL_MS);
+
+      await prisma.user.update({
+        where: { id: request.userId },
+        data: { verificationCode: code, verificationCodeExpiresAt: expiresAt },
+      });
+
+      return reply.send({ code, expiresAt });
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: 'Failed to generate verification code' });
+    }
+  });
+
   // Submit (or resubmit) a verification selfie
   fastify.post('/submit', { preHandler: authenticate }, async (request, reply) => {
     try {
@@ -12,6 +48,28 @@ export default async function verificationRoutes(fastify: FastifyInstance) {
 
       if (!data) {
         return reply.status(400).send({ error: 'No file uploaded' });
+      }
+
+      // Sent as a form field ahead of the file part in the multipart body (see APIService's
+      // submitVerificationPhoto) — @fastify/multipart only exposes fields that arrived before
+      // the file it's currently parsing, hence the field-ordering requirement on the client.
+      const submittedCode = (data.fields.code as { value?: unknown } | undefined)?.value;
+
+      const user = await prisma.user.findUnique({
+        where: { id: request.userId },
+        select: { verificationCode: true, verificationCodeExpiresAt: true },
+      });
+
+      if (
+        typeof submittedCode !== 'string' ||
+        !user?.verificationCode ||
+        submittedCode !== user.verificationCode ||
+        !user.verificationCodeExpiresAt ||
+        user.verificationCodeExpiresAt < new Date()
+      ) {
+        return reply.status(400).send({
+          error: 'Your verification code expired. Get a new code and retake the selfie.',
+        });
       }
 
       const buffer = await data.toBuffer();
@@ -82,6 +140,7 @@ export default async function verificationRoutes(fastify: FastifyInstance) {
           email: true,
           verificationStatus: true,
           verificationPhotoUrl: true,
+          verificationCode: true,
           photos: {
             where: { moderationStatus: 'approved' },
             orderBy: { order: 'asc' },
@@ -96,6 +155,10 @@ export default async function verificationRoutes(fastify: FastifyInstance) {
           email: u.email,
           status: u.verificationStatus,
           selfieUrl: u.verificationPhotoUrl ? await getPresignedUrl(u.verificationPhotoUrl) : null,
+          // The code the user was required to hold up on-camera for this submission — reviewers
+          // should reject anything where it isn't legibly visible in the selfie, since that's the
+          // whole point (see schema.prisma's User.verificationCode comment).
+          expectedCode: u.verificationCode,
           profilePhotoUrls: await Promise.all(u.photos.map((p) => getPresignedUrl(p.url))),
         }))
       );

@@ -7,5 +7,7 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Lumen uses your camera to take a live verification selfie — this can't be a photo from your library, so the badge means something.</string>
 </dict>
 </plist>

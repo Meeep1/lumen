@@ -133,6 +133,16 @@
     padding: 16px;
     margin-bottom: 12px;
   }
+  .verify-code {
+    font-size: 13px;
+    background: rgba(255, 193, 7, 0.12);
+    border: 1px solid rgba(255, 193, 7, 0.4);
+    border-radius: 8px;
+    padding: 6px 10px;
+    display: inline-block;
+    margin: 4px 0;
+  }
+  .verify-code b { letter-spacing: 0.1em; }
   .photo-row { display: flex; gap: 10px; margin: 10px 0; flex-wrap: wrap; }
   .photo-col { text-align: center; }
   .photo-col .label { font-size: 11px; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.03em; }
@@ -837,6 +847,7 @@ function renderVerification(data) {
   els.verificationList.innerHTML = requests.map((r) => `
     <div class="verify-card">
       <div class="who"><b>${escapeHtml(r.email)}</b></div>
+      ${r.expectedCode ? `<div class="verify-code">Code that should be visible in the selfie: <b>${escapeHtml(r.expectedCode)}</b></div>` : ''}
       <div class="photo-row">
         <div class="photo-col">
           ${r.selfieUrl ? `<img class="photo-thumb selfie-thumb" src="${escapeAttr(r.selfieUrl)}">` : '<div class="photo-thumb"></div>'}
