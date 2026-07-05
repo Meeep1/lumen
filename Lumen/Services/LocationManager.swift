@@ -73,10 +73,17 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             guard let request = MKReverseGeocodingRequest(location: location) else {
                 throw APIError.serverError("Reverse geocoding request already in progress")
             }
-            guard let address = try await request.mapItems.first?.address else {
+            guard let mapItem = try await request.mapItems.first else {
                 throw APIError.serverError("No address found")
             }
-            return address.shortAddress ?? address.fullAddress
+            // Deliberately not `address.shortAddress`/`.fullAddress` — both are full street-level
+            // strings (e.g. "1 Apple Park Way, Cupertino, CA"), which is exactly the exact-address
+            // leak this app promises never to show (see the location step's own on-screen copy:
+            // "we only ever show your city and distance"). `addressRepresentations.cityName` is
+            // the actual city-only field; `cityWithContext` (city + state, still no street) is the
+            // fallback for the rarer case a location doesn't resolve to a named city.
+            let representations = mapItem.addressRepresentations
+            return representations?.cityName ?? representations?.cityWithContext ?? ""
         } else {
             let placemarks = try await CLGeocoder().reverseGeocodeLocation(location)
             guard let placemark = placemarks.first else {

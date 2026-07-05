@@ -345,8 +345,14 @@ struct MessageBubble: View {
                 }
 
                 if let imageUrl = APIService.shared.imageURL(for: message.imageUrl) {
+                    // Fixed width AND height, not maxWidth/maxHeight — matches the same fix
+                    // ProfileCardView/etc. already needed (see their own comments): `.fill`
+                    // makes an image *report* its overflowed size to layout, and a max-only frame
+                    // has no floor, so the surrounding VStack could collapse this down to a thin
+                    // sliver instead of an actual 200x200 square. Overlay content never
+                    // participates in layout, so no photo aspect ratio can distort the bubble.
                     Color.clear
-                        .frame(maxWidth: 200, maxHeight: 200)
+                        .frame(width: 200, height: 200)
                         .overlay {
                             AsyncImage(url: imageUrl) { image in
                                 image.resizable().scaledToFill()
