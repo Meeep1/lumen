@@ -63,6 +63,15 @@ async function main() {
     // longer prove it holds the lock, so it fails the job as "Missing lock for job N" and retries
     // a photo that had already finished. Set well above the worst observed classification time.
     lockDuration: 120000,
+    // Same root cause, different BullMQ mechanism: the periodic "is this job's lock still valid"
+    // stalled-check also runs on a timer inside this same process, so it's just as vulnerable to
+    // being delayed by the same event-loop blocking. Left at the 30s default, a single delayed
+    // check was enough to permanently fail a job as "stalled more than allowable limit"
+    // (maxStalledCount's default of 1 gives no tolerance at all) even though it was still
+    // actively — and successfully — classifying. Match stalledInterval to lockDuration and allow
+    // a couple of stalled findings before giving up for good.
+    stalledInterval: 120000,
+    maxStalledCount: 3,
   });
 
   worker.on('failed', (job, err) => {
