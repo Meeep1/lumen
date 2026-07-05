@@ -685,7 +685,14 @@ function renderPhotos(data) {
         <div class="who">${escapeHtml(p.userEmail)}</div>
         ${(p.labels && p.labels.length > 0) ? `
           <div class="mod-labels">${p.labels.map((l) => `<span class="label-chip">${escapeHtml(l)}</span>`).join('')}</div>
-        ` : ''}
+        ` : (p.status === 'pending' ? `
+          <div class="meta" style="margin-bottom:8px">
+            Still being scanned by the background worker — no score yet. This isn't a flagged
+            item, it just hasn't been classified yet (usually seconds; can take longer right
+            after a deploy/restart while the model reloads). Refresh shortly, or judge the image
+            yourself and act on it now.
+          </div>
+        ` : '')}
         <div class="mod-actions" style="margin-bottom:8px">
           <button class="ghost" onclick="openProfileModal('${p.userId}')">View profile</button>
         </div>
