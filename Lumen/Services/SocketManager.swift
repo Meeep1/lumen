@@ -190,7 +190,7 @@ class SocketManager: ObservableObject {
             DispatchQueue.main.async {
                 self.showLocalNotification(
                     title: "Report Reviewed",
-                    body: "Thanks for reporting — our team has reviewed it and taken appropriate action."
+                    body: "Thanks for reporting. Our team has reviewed it and taken appropriate action."
                 )
             }
 

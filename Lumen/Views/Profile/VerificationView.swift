@@ -170,7 +170,7 @@ struct VerificationView: View {
             .disabled(capturedImage == nil || codeResponse == nil || isSubmitting)
             .padding(.horizontal)
 
-            Text("Your code has to be visibly held up in a live selfie — not a photo from your library — before a real person compares it to your profile photos. Usually reviewed within a day.")
+            Text("Your code has to be visibly held up in a live selfie, not a photo from your library, before a real person compares it to your profile photos. Usually reviewed within a day.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

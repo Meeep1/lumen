@@ -16,7 +16,7 @@ struct TagsStepView: View {
             Text("What's your style?")
                 .font(.title.bold())
 
-            Text("Add a few tags — soft goth, gamer girl, cottagecore, whatever fits.")
+            Text("Add a few tags: soft goth, gamer girl, cottagecore, whatever fits.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 32)

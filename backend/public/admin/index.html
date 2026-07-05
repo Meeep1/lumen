@@ -387,7 +387,7 @@
         <h3 style="margin-top:0">Send a message as a test account</h3>
         <p style="font-size:13px;color:var(--muted);margin-top:-8px">
           Picks (or creates) a match between the test account and the email you enter, then
-          sends the message — it'll arrive live in the app if that account is online.
+          sends the message. It'll arrive live in the app if that account is online.
         </p>
 
         <label for="testFromAccount">Send as</label>
@@ -407,7 +407,7 @@
     <div id="analyticsSection" class="hidden">
       <div class="tabs">
         <span style="font-size:13px;color:var(--muted)">
-          How far people get through onboarding before dropping off. Self-hosted — no data ever
+          How far people get through onboarding before dropping off. Self-hosted: no data ever
           leaves this server.
         </span>
         <button id="analyticsRefreshBtn" class="ghost" style="margin-left:auto">Refresh</button>
@@ -505,7 +505,7 @@ async function authedFetch(path, options = {}) {
   });
   if (res.status === 401) {
     logout();
-    throw new Error('Session expired — sign in again');
+    throw new Error('Session expired, sign in again');
   }
   return res;
 }
@@ -734,7 +734,7 @@ function renderPhotos(data) {
           <div class="mod-labels">${p.labels.map((l) => `<span class="label-chip">${escapeHtml(l)}</span>`).join('')}</div>
         ` : (p.status === 'pending' ? `
           <div class="meta" style="margin-bottom:8px">
-            Still being scanned by the background worker — no score yet. This isn't a flagged
+            Still being scanned by the background worker, no score yet. This isn't a flagged
             item, it just hasn't been classified yet (usually seconds; can take longer right
             after a deploy/restart while the model reloads). Refresh shortly, or judge the image
             yourself and act on it now.
@@ -805,7 +805,7 @@ els.testSendBtn.addEventListener('click', async () => {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to send');
 
-    els.testToolsStatus.textContent = 'Sent — check the app.';
+    els.testToolsStatus.textContent = 'Sent. Check the app.';
     els.testToolsStatus.classList.add('success');
     els.testMessageContent.value = '';
   } catch (err) {
@@ -1035,7 +1035,7 @@ window.openProfileModal = async function (userId, chatWithUserId) {
         <div><b>Gender:</b> ${escapeHtml(u.genderIdentity)}${u.genderIdentityOther ? ' (' + escapeHtml(u.genderIdentityOther) + ')' : ''}</div>
         <div><b>City:</b> ${escapeHtml(u.cityDisplay || '—')}</div>
         <div><b>Verified:</b> ${u.isVerified ? 'Yes' : 'No'}</div>
-        <div><b>Suspended:</b> ${u.isSuspended ? 'Yes' + (u.suspensionReason ? ' — ' + escapeHtml(u.suspensionReason) : '') : 'No'}</div>
+        <div><b>Suspended:</b> ${u.isSuspended ? 'Yes' + (u.suspensionReason ? ' (' + escapeHtml(u.suspensionReason) + ')' : '') : 'No'}</div>
         <div><b>Active / Discoverable:</b> ${u.isActive ? 'Active' : 'Inactive'} / ${u.discoverable ? 'Discoverable' : 'Hidden'}</div>
         <div><b>Joined:</b> ${new Date(u.createdAt).toLocaleDateString()}</div>
         <div><b>Last active:</b> ${new Date(u.lastActiveAt).toLocaleString()}</div>

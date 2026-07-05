@@ -301,7 +301,7 @@ struct ChatView: View {
                 let uiImage = UIImage(data: data),
                 let jpegData = uiImage.jpegData(compressionQuality: 0.85)
             else {
-                imageSendErrorMessage = "Couldn't read that image — try a different one."
+                imageSendErrorMessage = "Couldn't read that image. Try a different one."
                 return
             }
 

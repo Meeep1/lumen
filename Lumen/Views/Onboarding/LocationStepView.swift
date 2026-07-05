@@ -20,7 +20,7 @@ struct LocationStepView: View {
             Text("Where are you?")
                 .font(.title.bold())
 
-            Text("Lumen uses your location to show you people nearby. We only ever show your city and distance to others — never your exact location.")
+            Text("Lumen uses your location to show you people nearby. We only ever show your city and distance to others, never your exact location.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 32)

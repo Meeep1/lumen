@@ -351,7 +351,7 @@ struct ReportUserSheet: View {
         .customAlert(
             isPresented: $didSubmit,
             title: "Report Submitted",
-            message: "Thanks — our team will review it.",
+            message: "Thanks, our team will review it.",
             onDismiss: { dismiss() }
         )
     }

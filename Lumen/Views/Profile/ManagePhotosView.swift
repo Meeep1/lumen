@@ -125,7 +125,7 @@ struct ManagePhotosView: View {
     @ViewBuilder
     private func appealControl(for photo: Photo) -> some View {
         if photo.appealStatus == "pending" {
-            Text("Appeal submitted — awaiting review")
+            Text("Appeal submitted, awaiting review")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         } else if photo.canAppeal == true {
@@ -164,7 +164,7 @@ struct ManagePhotosView: View {
         // fix: a profile always keeps at least one photo; swap it instead of removing it if
         // this was the last one.
         guard photos.count - offsets.count >= 1 else {
-            errorMessage = "You need at least one photo — add a replacement before removing this one."
+            errorMessage = "You need at least one photo. Add a replacement before removing this one."
             return
         }
 
@@ -256,7 +256,7 @@ private struct AppealComposerView: View {
                 })
 
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("Tell us why this photo should be reconsidered — optional, but it helps whoever reviews it.")
+                    Text("Tell us why this photo should be reconsidered. Optional, but it helps whoever reviews it.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
