@@ -55,6 +55,14 @@ async function main() {
     // (see moderateImage's own comments) — concurrency above 1 wouldn't make classification
     // itself faster, just contend for the same CPU. Simplicity over a marginal, uncertain win.
     concurrency: 1,
+    // BullMQ's default 30s job lock isn't long enough here: moderateImage()'s TensorFlow
+    // classification is genuinely synchronous, CPU-blocking work for its whole 5-12+s run (worse
+    // under load, since this process shares a single vCPU with the API, Postgres, and Redis) —
+    // long enough to delay the lock's own renewal timer past the default lock duration. When that
+    // happens the job is still actually running (and its DB update still lands) but BullMQ can no
+    // longer prove it holds the lock, so it fails the job as "Missing lock for job N" and retries
+    // a photo that had already finished. Set well above the worst observed classification time.
+    lockDuration: 120000,
   });
 
   worker.on('failed', (job, err) => {
