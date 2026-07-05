@@ -7,6 +7,7 @@
 <style>
   :root {
     --pink: #e0447a;
+    --pink-dark: #b5285a;
     --ink: #1a1418;
     --muted: #7a6f74;
     --border: #ece3e6;
@@ -14,6 +15,7 @@
     --card: #ffffff;
     --warn: #c8781f;
     --danger: #c8353f;
+    --shadow: 0 1px 2px rgba(26,20,24,0.04), 0 8px 24px -12px rgba(26,20,24,0.12);
   }
   * { box-sizing: border-box; }
   body {
@@ -26,35 +28,60 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 16px 24px;
+    padding: 14px 28px;
     border-bottom: 1px solid var(--border);
     background: var(--card);
+    position: sticky;
+    top: 0;
+    z-index: 10;
   }
   header h1 {
-    font-size: 18px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 17px;
     margin: 0;
     font-weight: 700;
     letter-spacing: -0.01em;
   }
-  header h1 span { color: var(--pink); }
-  #whoami { font-size: 13px; color: var(--muted); margin-right: 12px; }
+  header h1 .logo-heart {
+    color: var(--pink);
+    font-size: 16px;
+  }
+  header h1 .tag {
+    font-weight: 600;
+    color: var(--muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 2px 9px;
+    margin-left: 4px;
+  }
+  #headerRight { display: flex; align-items: center; gap: 12px; }
+  #whoami { font-size: 13px; color: var(--muted); }
   button {
     font: inherit;
     cursor: pointer;
-    border-radius: 8px;
+    border-radius: 9px;
     border: 1px solid var(--border);
     background: var(--card);
     padding: 8px 14px;
+    transition: background 0.12s ease, border-color 0.12s ease, transform 0.06s ease;
   }
+  button:hover { border-color: #ddc9d0; }
+  button:active { transform: translateY(1px); }
   button.primary {
     background: var(--pink);
     color: white;
     border-color: var(--pink);
   }
+  button.primary:hover { background: var(--pink-dark); border-color: var(--pink-dark); }
   button.ghost { background: transparent; }
-  button:disabled { opacity: 0.5; cursor: default; }
+  button:disabled { opacity: 0.5; cursor: default; transform: none; }
 
-  main { max-width: 960px; margin: 0 auto; padding: 24px; }
+  main { max-width: 1280px; margin: 0 auto; padding: 28px; }
 
   /* --- Login --- */
   #loginView {
@@ -64,8 +91,22 @@
     border: 1px solid var(--border);
     border-radius: 16px;
     padding: 32px;
+    box-shadow: var(--shadow);
+    text-align: center;
   }
-  #loginView h2 { margin-top: 0; }
+  #loginView .login-heart {
+    width: 44px;
+    height: 44px;
+    margin: 0 auto 12px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, var(--pink), #f0a3c0);
+    color: white;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #loginView h2 { margin-top: 0; text-align: center; }
   #loginView input {
     width: 100%;
     padding: 10px 12px;
@@ -73,11 +114,60 @@
     border: 1px solid var(--border);
     border-radius: 8px;
     font: inherit;
+    text-align: left;
   }
   #loginError { color: var(--danger); font-size: 13px; min-height: 18px; }
 
+  /* --- Dashboard layout: sidebar + content --- */
+  .dashboard-shell { display: flex; align-items: flex-start; gap: 32px; }
+  .sidebar { width: 208px; flex-shrink: 0; position: sticky; top: 88px; }
+  .sidebar-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin: 0 0 10px 4px;
+  }
+  .section-nav { display: flex; flex-direction: column; gap: 2px; }
+  .section-nav button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-content: flex-start;
+    text-align: left;
+    border-color: transparent;
+    background: transparent;
+    padding: 10px 12px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+    width: 100%;
+  }
+  .section-nav button:hover { background: var(--card); border-color: var(--border); }
+  .section-nav button.active {
+    background: var(--pink);
+    color: white;
+    box-shadow: var(--shadow);
+  }
+  .section-nav .nav-icon { font-size: 15px; line-height: 1; }
+  .dashboard-content { flex: 1; min-width: 0; }
+
+  @media (max-width: 780px) {
+    .dashboard-shell { flex-direction: column; }
+    .sidebar { width: 100%; position: static; }
+    .section-nav { flex-direction: row; overflow-x: auto; gap: 6px; padding-bottom: 4px; }
+    .section-nav button { flex-shrink: 0; }
+  }
+
+  @media (max-width: 600px) {
+    header { padding: 12px 16px; }
+    #whoami { display: none; }
+    main { padding: 16px; }
+  }
+
   /* --- Dashboard --- */
-  .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .tabs { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
   .tabs button.active { background: var(--ink); color: white; border-color: var(--ink); }
 
   .report {
@@ -86,6 +176,7 @@
     border-radius: 12px;
     padding: 16px;
     margin-bottom: 12px;
+    box-shadow: var(--shadow);
   }
   .report-top {
     display: flex;
@@ -123,15 +214,13 @@
 
   .empty { text-align: center; color: var(--muted); padding: 60px 0; }
 
-  .section-nav { display: flex; gap: 8px; margin-bottom: 20px; }
-  .section-nav button.active { background: var(--pink); color: white; border-color: var(--pink); }
-
   .verify-card {
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 16px;
     margin-bottom: 12px;
+    box-shadow: var(--shadow);
   }
   .verify-code {
     font-size: 13px;
@@ -171,6 +260,7 @@
     padding: 24px;
     width: 100%;
     max-width: 400px;
+    box-shadow: 0 4px 8px rgba(26,20,24,0.08), 0 24px 48px -16px rgba(26,20,24,0.28);
   }
   .modal h3 { margin-top: 0; }
   .modal label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
@@ -192,6 +282,7 @@
     border-radius: 12px;
     padding: 20px;
     max-width: 480px;
+    box-shadow: var(--shadow);
   }
   .tool-card label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
   .tool-card label:first-child { margin-top: 0; }
@@ -217,6 +308,7 @@
     border: 1px solid var(--border);
     border-radius: 12px;
     overflow: hidden;
+    box-shadow: var(--shadow);
   }
   .mod-card img {
     width: 100%;
@@ -261,6 +353,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+    box-shadow: var(--shadow);
   }
   .admin-row.inactive { opacity: 0.55; }
   .admin-email { font-weight: 600; }
@@ -312,7 +405,7 @@
 <body>
 
 <header>
-  <h1>Lumen <span>Admin</span></h1>
+  <h1><span class="logo-heart">♥</span> Lumen <span class="tag">Staff</span></h1>
   <div id="headerRight">
     <span id="whoami"></span>
     <button id="logoutBtn" class="ghost hidden">Log out</button>
@@ -321,6 +414,7 @@
 
 <main>
   <section id="loginView">
+    <div class="login-heart">♥</div>
     <h2>Admin sign in</h2>
     <input id="loginEmail" type="email" placeholder="Email" autocomplete="username">
     <input id="loginPassword" type="password" placeholder="Password" autocomplete="current-password">
@@ -328,17 +422,21 @@
     <div id="loginError"></div>
   </section>
 
-  <section id="dashboardView" class="hidden">
-    <div class="section-nav">
-      <button data-section="reports" data-permission="reports" class="active">Reports</button>
-      <button data-section="verification" data-permission="verification">Verification</button>
-      <button data-section="photos" data-permission="moderation">Photos</button>
-      <button data-section="appeals" data-permission="moderation">Appeals</button>
-      <button data-section="test-tools" data-permission="testTools">Test Tools</button>
-      <button data-section="analytics" data-permission="analytics">Analytics</button>
-      <button data-section="team" data-permission="__superAdmin">Team</button>
-    </div>
+  <section id="dashboardView" class="hidden dashboard-shell">
+    <nav class="sidebar">
+      <div class="sidebar-title">Menu</div>
+      <div class="section-nav">
+        <button data-section="reports" data-permission="reports" class="active"><span class="nav-icon">🚩</span> Reports</button>
+        <button data-section="verification" data-permission="verification"><span class="nav-icon">✅</span> Verification</button>
+        <button data-section="photos" data-permission="moderation"><span class="nav-icon">🖼️</span> Photos</button>
+        <button data-section="appeals" data-permission="moderation"><span class="nav-icon">🔁</span> Appeals</button>
+        <button data-section="test-tools" data-permission="testTools"><span class="nav-icon">🧪</span> Test Tools</button>
+        <button data-section="analytics" data-permission="analytics"><span class="nav-icon">📈</span> Analytics</button>
+        <button data-section="team" data-permission="__superAdmin"><span class="nav-icon">👥</span> Team</button>
+      </div>
+    </nav>
 
+    <div class="dashboard-content">
     <div id="reportsSection">
       <div class="tabs">
         <button data-status="" class="active">All</button>
@@ -422,6 +520,7 @@
         <button id="teamRefreshBtn" class="ghost">Refresh</button>
       </div>
       <div id="teamList"></div>
+    </div>
     </div>
   </section>
 </main>
