@@ -82,6 +82,15 @@ async function registerPlugins() {
     max: parseInt(process.env.RATE_LIMIT_MAX || '100'),
     timeWindow: parseInt(process.env.RATE_LIMIT_TIMEWINDOW || '60000'),
     redis: redis,
+    // Serving an already-uploaded photo isn't a sensitive action worth rate-limiting the same
+    // way as a write or auth endpoint — but without this exclusion it was counted against the
+    // same per-IP budget as everything else. A single Discovery scroll or admin Photos/Reports
+    // queue page load fires one request per thumbnail on top of the actual API call that listed
+    // them, so it took only a couple dozen photos to burn the whole per-minute budget and start
+    // 429ing completely unrelated requests from the same IP (surfaced as "Failed to load
+    // reports"/"Failed to load photo queue" in the admin site, and would do the same to real
+    // users browsing profiles in the app).
+    allowList: (req) => req.url.startsWith('/uploads/'),
   });
 
   // Multipart form uploads (used by POST /profile/photos)
