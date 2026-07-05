@@ -145,14 +145,25 @@ export function preloadModerationModel(): ReturnType<typeof nsfwjs.load> {
 ///     scored ~25% and still sailed through as approved, since 0.35 was well above it.
 ///   - Pass 3: pending=0.15 — comfortably above real clean photos (~0.1-0.2%), comfortably
 ///     below both confirmed-bad examples known at the time (~17-25%).
-///   - Pass 4 (current): a real explicit photo (user-reported) scored Neutral 65% / Sexy 14% /
+///   - Pass 4: a real explicit photo (user-reported) scored Neutral 65% / Sexy 14% /
 ///     Drawing 11% / Porn 7% (Hentai the remaining ~3%) — Porn+Hentai ≈ 0.10, *below* pass 3's
 ///     0.15 threshold, so it sailed through approved. The model just isn't confident on every
 ///     explicit photo; some score high Neutral despite being real nudity. Dropped pending to
 ///     0.05 — still ~25x above the confirmed-clean baseline (~0.001-0.002), and comfortably
 ///     below this new confirmed-bad example (~0.10).
-/// Still only ~5 confirmed real data points total (2 clean, 3 bad) — treat this as a working
-/// hypothesis that improves as the admin Photos queue collects more, not a solved problem.
+///   - Pass 5 (current): pending=0.05 turned out to be so aggressive that ordinary stylized art
+///     (avatars, fan art, non-explicit illustration) routinely tripped it too — Hentai's training
+///     data is anime/illustration-style art in general, not just explicit anime, so it fires on
+///     plenty of innocent drawings well above 0.05. That's real reported friction (legitimate art
+///     landing in the review queue nearly every time), not a hypothetical. Since a genuinely
+///     explicit illustration scores high on *both* Drawing and Hentai/Porn simultaneously (that's
+///     what hentai *is*), while innocent stylized art scores high on Drawing but low on
+///     Hentai/Porn, the fix is a separate, much higher pending bar that only applies once
+///     `looksLikeDrawing` is true — real photos (the pass-4 case this 0.05 floor exists for)
+///     are completely unaffected by this since they don't hit `looksLikeDrawing` in the first
+///     place.
+/// Still only a handful of confirmed real data points — treat this as a working hypothesis that
+/// improves as the admin Photos queue collects more, not a solved problem.
 /// Sexy stayed conservative (0.5) since it tends to fire on plainly benign photos (swimwear,
 /// workout clothes) more readily than Porn/Hentai do, and no confirmed bad example so far has
 /// needed it to catch anything Porn+Hentai didn't already.
@@ -186,6 +197,9 @@ export async function moderateImage(imageBytes: Buffer): Promise<{
   const pendingThreshold = parseFloat(process.env.MODERATION_PENDING_SCORE || '0.05');
   const sexyPendingThreshold = parseFloat(process.env.MODERATION_SEXY_PENDING_SCORE || '0.5');
   const drawingLeewayThreshold = parseFloat(process.env.MODERATION_DRAWING_LEEWAY_SCORE || '0.15');
+  // Only applies once looksLikeDrawing is true (see below) — real photos still use the much
+  // more aggressive pendingThreshold above unchanged.
+  const drawingPendingThreshold = parseFloat(process.env.MODERATION_DRAWING_PENDING_SCORE || '0.35');
 
   const labels = predictions
     .filter((p) => p.probability >= 0.05)
@@ -209,7 +223,15 @@ export async function moderateImage(imageBytes: Buffer): Promise<{
   if (explicitScore >= rejectThreshold && !looksLikeDrawing) {
     return { status: 'rejected', labels };
   }
-  if (explicitScore >= pendingThreshold || sexyScore >= sexyPendingThreshold) {
+
+  // A drawing needs a much stronger explicit signal than a photo does before it's worth a human's
+  // time — see this function's doc comment (Pass 5) for why pendingThreshold alone (0.05) caught
+  // ordinary stylized art far more often than it caught anything actually explicit.
+  const effectivePendingThreshold = looksLikeDrawing
+    ? Math.max(pendingThreshold, drawingPendingThreshold)
+    : pendingThreshold;
+
+  if (explicitScore >= effectivePendingThreshold || sexyScore >= sexyPendingThreshold) {
     return { status: 'pending', labels };
   }
   return { status: 'approved', labels };
