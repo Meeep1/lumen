@@ -60,7 +60,9 @@ class APIService {
         return URL(string: "\(baseURL)\(path)")
     }
 
-    private let decoder: JSONDecoder = {
+    // Internal (not private) so LumenTests can exercise the exact same decoder configuration
+    // real network responses go through — see LumenTests/APIServiceDecodingTests.swift.
+    let decoder: JSONDecoder = {
         let decoder = JSONDecoder()
         // Backend sends camelCase keys throughout (see backend/src/utils/validation.ts) —
         // do not convert case here, it would leave keys like "dateOfBirth" untouched but
