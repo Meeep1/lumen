@@ -201,6 +201,21 @@ struct DiscoveryView: View {
     }
 
     private func handleSwipe(on profile: DiscoveryProfile, direction: SwipeDirection) async {
+        // Advance immediately, before the network call — the card's own fly-off animation
+        // (see ProfileCardView.triggerSwipe) already completed by the time this runs, and
+        // `isTopCard` (which gates whether the next card's drag gesture even responds) is driven
+        // by `currentIndex`. Keeping that in lockstep with a real network round-trip meant a fast
+        // swiper could tap/drag the new top card during that window and have it silently do
+        // nothing — invisible on localhost, very noticeable once this started hitting the real
+        // production server instead.
+        withAnimation {
+            currentIndex += 1
+        }
+
+        if currentIndex >= profiles.count - 5 {
+            await loadProfiles()
+        }
+
         do {
             let result = try await APIService.shared.swipe(
                 action: SwipeAction(
@@ -223,17 +238,12 @@ struct DiscoveryView: View {
 
             // Only a swipe that didn't match can be undone — see swipe.ts's DELETE /swipe/last.
             canUndoLastSwipe = !result.matched
-
-            // Move to next profile
-            withAnimation {
-                currentIndex += 1
-            }
-
-            // Load more profiles if running low
-            if currentIndex >= profiles.count - 5 {
-                await loadProfiles()
-            }
         } catch {
+            // The swipe never made it to the server, but the card is already gone locally (see
+            // above) — rolling currentIndex back would yank a card back onto screen after the
+            // user's visibly moved past it, which reads as worse/more confusing than just letting
+            // it stand. Rare in practice (APIService already retries once on an expired token),
+            // and a fresh loadProfiles() re-fetches the true server-side unswiped set regardless.
             print("Swipe error: \(error)")
         }
     }

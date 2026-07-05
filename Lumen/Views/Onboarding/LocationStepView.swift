@@ -68,10 +68,6 @@ struct LocationStepView: View {
             .disabled(locationManager.isResolving || isSaving)
             .padding(.bottom, 32)
         }
-        .onChange(of: locationManager.resolvedLocation?.cityDisplay) { _, newValue in
-            guard newValue != nil else { return }
-            Task { await save() }
-        }
     }
 
     private func save() async {
