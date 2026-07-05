@@ -7,8 +7,12 @@ struct DiscoveryView: View {
     @State private var showingFilters = false
     @State private var currentIndex = 0
     @State private var matchedProfile: DiscoveryProfile?
+    @State private var matchedMatchId: String?
     @State private var matchTextPop = false
     @State private var matchPhotoPop = false
+    @State private var matchRingPulse = false
+    @State private var chatMatch: Match?
+    @State private var showingMatchChat = false
     /// Only ever the single most recent swipe, and only set when it didn't match (the backend
     /// rejects undoing a match outright — see swipe.ts's DELETE /swipe/last — so there's no
     /// point letting the button look tappable when it would just come back as an error).
@@ -64,6 +68,11 @@ struct DiscoveryView: View {
             .overlay {
                 if let matchedProfile {
                     matchCelebration(profile: matchedProfile)
+                }
+            }
+            .navigationDestination(isPresented: $showingMatchChat) {
+                if let chatMatch {
+                    ChatView(match: chatMatch)
                 }
             }
         }
@@ -228,6 +237,7 @@ struct DiscoveryView: View {
             )
 
             if result.matched {
+                matchedMatchId = result.matchId
                 withAnimation {
                     matchedProfile = profile
                 }
@@ -268,41 +278,85 @@ struct DiscoveryView: View {
 
     private func matchCelebration(profile: DiscoveryProfile) -> some View {
         ZStack {
-            Color.black.opacity(0.75)
-                .ignoresSafeArea()
-                .onTapGesture { withAnimation { matchedProfile = nil } }
+            // A soft radial glow behind everything reads as more of an occasion than the flat
+            // black scrim alone did, and doubles as the surface the pulsing ring animates against.
+            RadialGradient(
+                colors: [Color.pink.opacity(0.35), Color.black.opacity(0.9)],
+                center: .center,
+                startRadius: 0,
+                endRadius: 320
+            )
+            .ignoresSafeArea()
+            .onTapGesture { withAnimation { matchedProfile = nil } }
 
-            VStack(spacing: 20) {
+            VStack(spacing: 22) {
                 Text("It's a Match!")
-                    .font(.system(size: 36, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
+                    .font(.system(size: 38, weight: .bold, design: .rounded))
+                    .foregroundStyle(Theme.primaryGradient)
                     .scaleEffect(matchTextPop ? 1 : 0.6)
                     .opacity(matchTextPop ? 1 : 0)
 
-                if let photoUrl = APIService.shared.imageURL(for: profile.primaryPhoto) {
-                    AsyncImage(url: photoUrl) { image in
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Circle().fill(Color.white.opacity(0.2))
+                ZStack {
+                    Circle()
+                        .stroke(Theme.primaryGradient, lineWidth: 3)
+                        .frame(width: 180, height: 180)
+                        .scaleEffect(matchRingPulse ? 1.15 : 0.9)
+                        .opacity(matchRingPulse ? 0 : 0.8)
+
+                    if let photoUrl = APIService.shared.imageURL(for: profile.primaryPhoto) {
+                        AsyncImage(url: photoUrl) { image in
+                            image.resizable().aspectRatio(contentMode: .fill)
+                        } placeholder: {
+                            Circle().fill(Color.white.opacity(0.2))
+                        }
+                        .frame(width: 160, height: 160)
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(.white, lineWidth: 4))
+                        .scaleEffect(matchPhotoPop ? 1 : 0.4)
+                        .opacity(matchPhotoPop ? 1 : 0)
                     }
-                    .frame(width: 160, height: 160)
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(.white, lineWidth: 4))
-                    .scaleEffect(matchPhotoPop ? 1 : 0.4)
-                    .opacity(matchPhotoPop ? 1 : 0)
                 }
 
-                Text("You and \(profile.genderIdentity.displayName.lowercased()) matched. Say hi from the Matches tab!")
+                Text("You and \(profile.genderIdentity.displayName.lowercased()) matched. Break the ice and send the first message.")
                     .foregroundColor(.white.opacity(0.85))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)
 
-                Button {
-                    withAnimation { matchedProfile = nil }
-                } label: {
-                    Text("Keep Swiping")
+                VStack(spacing: 12) {
+                    Button {
+                        if let matchedMatchId {
+                            chatMatch = Match(
+                                matchId: matchedMatchId,
+                                userId: profile.id,
+                                age: profile.age,
+                                genderIdentity: profile.genderIdentity,
+                                cityDisplay: profile.cityDisplay,
+                                isVerified: profile.isVerified,
+                                photo: profile.primaryPhoto,
+                                isOnline: nil,
+                                lastActiveAt: nil,
+                                lastMessage: nil,
+                                matchedAt: Date()
+                            )
+                            showingMatchChat = true
+                        }
+                        withAnimation { matchedProfile = nil }
+                    } label: {
+                        Label("Send a Message", systemImage: "paperplane.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(LumenPrimaryButtonStyle())
+                    .disabled(matchedMatchId == nil)
+
+                    Button {
+                        withAnimation { matchedProfile = nil }
+                    } label: {
+                        Text("Keep Swiping")
+                            .foregroundColor(.white.opacity(0.85))
+                    }
+                    .buttonStyle(LumenPressableStyle())
+                    .padding(.top, 2)
                 }
-                .buttonStyle(LumenPrimaryButtonStyle())
                 .padding(.horizontal, 40)
                 .padding(.top, 12)
             }
@@ -311,11 +365,15 @@ struct DiscoveryView: View {
         .onAppear {
             matchTextPop = false
             matchPhotoPop = false
+            matchRingPulse = false
             withAnimation(.spring(response: 0.45, dampingFraction: 0.6)) {
                 matchPhotoPop = true
             }
             withAnimation(.spring(response: 0.45, dampingFraction: 0.65).delay(0.1)) {
                 matchTextPop = true
+            }
+            withAnimation(.easeOut(duration: 1.4).repeatForever(autoreverses: false)) {
+                matchRingPulse = true
             }
         }
     }
