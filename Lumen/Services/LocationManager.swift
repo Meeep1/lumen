@@ -1,5 +1,6 @@
 import Foundation
 import CoreLocation
+import MapKit
 import Combine
 
 @MainActor
@@ -42,10 +43,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         Task {
             do {
                 let location = try await requestSingleLocation()
-                let placemark = try await reverseGeocode(location)
-                let city = [placemark.locality, placemark.administrativeArea]
-                    .compactMap { $0 }
-                    .joined(separator: ", ")
+                let city = try await reverseGeocodeCityDisplay(location)
                 resolvedLocation = (
                     latitude: location.coordinate.latitude,
                     longitude: location.coordinate.longitude,
@@ -65,12 +63,29 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         }
     }
 
-    private func reverseGeocode(_ location: CLLocation) async throws -> CLPlacemark {
-        let placemarks = try await CLGeocoder().reverseGeocodeLocation(location)
-        guard let placemark = placemarks.first else {
-            throw APIError.serverError("No placemark found")
+    private func reverseGeocodeCityDisplay(_ location: CLLocation) async throws -> String {
+        // CLGeocoder (and CLPlacemark's locality/administrativeArea fields) are deprecated as of
+        // iOS 26 in favor of MapKit's own request type — MKAddress only exposes a formatted
+        // string (no separate city/state components anymore), hence returning a display string
+        // directly here rather than a placemark-like structured value. Keeping the CLGeocoder
+        // path for older OS versions this app might still run on rather than dropping support.
+        if #available(iOS 26.0, *) {
+            guard let request = MKReverseGeocodingRequest(location: location) else {
+                throw APIError.serverError("Reverse geocoding request already in progress")
+            }
+            guard let address = try await request.mapItems.first?.address else {
+                throw APIError.serverError("No address found")
+            }
+            return address.shortAddress ?? address.fullAddress
+        } else {
+            let placemarks = try await CLGeocoder().reverseGeocodeLocation(location)
+            guard let placemark = placemarks.first else {
+                throw APIError.serverError("No placemark found")
+            }
+            return [placemark.locality, placemark.administrativeArea]
+                .compactMap { $0 }
+                .joined(separator: ", ")
         }
-        return placemark
     }
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {

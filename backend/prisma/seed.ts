@@ -263,7 +263,7 @@ async function main() {
         genderIdentityOther: p.genderIdentityOther,
         femAttestationAccepted: true,
         femAttestationAcceptedAt: new Date(),
-        phoneVerified: true,
+        emailVerified: true,
         bio: p.bio,
         pronouns: p.pronouns,
         styleTags: p.styleTags,

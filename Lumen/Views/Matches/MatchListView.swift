@@ -4,34 +4,46 @@ private struct ProfileSheetTarget: Identifiable { let id: String }
 
 struct MatchListView: View {
     @EnvironmentObject var authManager: AuthenticationManager
+    /// MainTabView keeps every visited tab mounted (opacity toggling, not recreation) so
+    /// scroll position survives switching away — but that also means `.task` below only ever
+    /// fires once per app session, never again just from switching back to this tab. A new
+    /// match made while this tab was already mounted would never appear without this.
+    var isActive: Bool = true
     @State private var matches: [Match] = []
     @State private var isLoading = false
     @State private var profileTarget: ProfileSheetTarget?
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                // Color needs to sit behind everything and fill the screen itself — a
-                // `.background()` on the Group below only covers whatever size that Group's
-                // content happens to be, which for the loading spinner / empty state is just
-                // their intrinsic size, leaving the rest of the screen showing the default
-                // system background as a visibly different-colored box around them.
-                Color.lumenBackground
-                    .ignoresSafeArea()
+            VStack(spacing: 0) {
+                LumenHeader(title: "Matches")
 
-                Group {
-                    if isLoading {
-                        ProgressView()
-                    } else if matches.isEmpty {
-                        emptyState
-                    } else {
-                        matchList
+                ZStack {
+                    // Color needs to sit behind everything and fill the screen itself — a
+                    // `.background()` on the Group below only covers whatever size that Group's
+                    // content happens to be, which for the loading spinner / empty state is just
+                    // their intrinsic size, leaving the rest of the screen showing the default
+                    // system background as a visibly different-colored box around them.
+                    Color.lumenBackground
+                        .ignoresSafeArea()
+
+                    Group {
+                        if isLoading {
+                            ProgressView()
+                        } else if matches.isEmpty {
+                            emptyState
+                        } else {
+                            matchList
+                        }
                     }
                 }
             }
-            .navigationTitle("Matches")
+            .toolbar(.hidden, for: .navigationBar)
             .task {
                 await loadMatches()
+            }
+            .onChange(of: isActive) { _, active in
+                if active { Task { await loadMatches() } }
             }
             .refreshable {
                 await loadMatches()
@@ -163,7 +175,7 @@ struct MatchRowView: View {
                         .aspectRatio(contentMode: .fill)
                 } placeholder: {
                     Rectangle()
-                        .fill(Color(uiColor: .systemGray5))
+                        .fill(Color.lumenSurfaceStrong)
                         .overlay {
                             ProgressView()
                         }

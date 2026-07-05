@@ -2,10 +2,12 @@ import { FastifyInstance } from 'fastify';
 import appleSignin from 'apple-signin-auth';
 import { prisma } from '../server';
 import { hashPassword, verifyPassword, generateOTP, generateRefreshToken } from '../utils/auth';
-import { sendOTP } from '../utils/sms';
+import { sendOTPEmail } from '../utils/email';
+import { resetTestAccount } from '../utils/testAccount';
 import {
   signupSchema,
   verifyOTPSchema,
+  resendOTPSchema,
   loginSchema,
   refreshTokenSchema,
   appleAuthSchema,
@@ -14,7 +16,9 @@ import {
 
 export default async function authRoutes(fastify: FastifyInstance) {
   // Signup - Step 1: Create account and send OTP
-  fastify.post('/signup', async (request, reply) => {
+  // Tighter than the global default (server.ts) — this sends a real email and creates a DB row,
+  // so it's a cheap way to spam either without a much lower per-IP ceiling than general traffic.
+  fastify.post('/signup', { config: { rateLimit: { max: 5, timeWindow: 60000 } } }, async (request, reply) => {
     try {
       const data = signupSchema.parse(request.body);
 
@@ -41,7 +45,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
       if (data.appleIdentityToken) {
         try {
           const appleData = await appleSignin.verifyIdToken(data.appleIdentityToken, {
-            audience: process.env.APPLE_BUNDLE_ID || 'com.camdenheil.lumen',
+            audience: process.env.APPLE_BUNDLE_ID || 'com.lumenfem.dating',
           });
           appleUserId = appleData.sub;
         } catch (err) {
@@ -76,15 +80,15 @@ export default async function authRoutes(fastify: FastifyInstance) {
           femAttestationAcceptedAt: new Date(),
           otpCode,
           otpExpiresAt,
-          phoneVerified: false,
+          emailVerified: false,
         },
       });
 
       // Send OTP
-      await sendOTP(data.phone, otpCode);
+      await sendOTPEmail(data.email, otpCode);
 
       return reply.status(201).send({
-        message: 'Account created. Please verify your phone number.',
+        message: 'Account created. Please verify your email.',
         userId: user.id,
       });
     } catch (error: any) {
@@ -98,21 +102,23 @@ export default async function authRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Verify OTP - Step 2: Verify phone number
-  fastify.post('/verify-otp', async (request, reply) => {
+  // Verify OTP - Step 2: Verify email
+  // Loose enough to allow a few mistyped-code retries, tight enough to make brute-forcing a
+  // 6-digit code (1M combinations) impractical within any single OTP's expiry window.
+  fastify.post('/verify-otp', { config: { rateLimit: { max: 10, timeWindow: 60000 } } }, async (request, reply) => {
     try {
       const data = verifyOTPSchema.parse(request.body);
 
       const user = await prisma.user.findUnique({
-        where: { phone: data.phone },
+        where: { email: data.email },
       });
 
       if (!user) {
         return reply.status(404).send({ error: 'User not found' });
       }
 
-      if (user.phoneVerified) {
-        return reply.status(400).send({ error: 'Phone already verified' });
+      if (user.emailVerified) {
+        return reply.status(400).send({ error: 'Email already verified' });
       }
 
       if (!user.otpCode || !user.otpExpiresAt) {
@@ -127,11 +133,11 @@ export default async function authRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({ error: 'Invalid OTP code' });
       }
 
-      // Mark phone as verified
+      // Mark email as verified
       await prisma.user.update({
         where: { id: user.id },
         data: {
-          phoneVerified: true,
+          emailVerified: true,
           otpCode: null,
           otpExpiresAt: null,
         },
@@ -172,20 +178,23 @@ export default async function authRoutes(fastify: FastifyInstance) {
   });
 
   // Resend OTP
-  fastify.post('/resend-otp', async (request, reply) => {
+  // The tightest of the auth limits — this is the one that sends a real email on every call
+  // with no other side effect gating it (unlike signup, which at least requires a fresh,
+  // not-already-registered email/phone first).
+  fastify.post('/resend-otp', { config: { rateLimit: { max: 3, timeWindow: 60000 } } }, async (request, reply) => {
     try {
-      const { phone } = request.body as { phone: string };
+      const { email } = resendOTPSchema.parse(request.body);
 
       const user = await prisma.user.findUnique({
-        where: { phone },
+        where: { email },
       });
 
       if (!user) {
         return reply.status(404).send({ error: 'User not found' });
       }
 
-      if (user.phoneVerified) {
-        return reply.status(400).send({ error: 'Phone already verified' });
+      if (user.emailVerified) {
+        return reply.status(400).send({ error: 'Email already verified' });
       }
 
       // Generate new OTP
@@ -197,17 +206,26 @@ export default async function authRoutes(fastify: FastifyInstance) {
         data: { otpCode, otpExpiresAt },
       });
 
-      await sendOTP(phone, otpCode);
+      await sendOTPEmail(email, otpCode);
 
       return reply.send({ message: 'New OTP sent' });
-    } catch (error) {
+    } catch (error: any) {
       fastify.log.error(error);
+
+      if (error.name === 'ZodError') {
+        return reply.status(400).send({ error: zodErrorMessage(error) });
+      }
+
       return reply.status(500).send({ error: 'Failed to resend OTP' });
     }
   });
 
   // Login
-  fastify.post('/login', async (request, reply) => {
+  // Tighter than the global default — brute-forcing a password is exactly the traffic shape
+  // (many requests, same IP, same endpoint) this needs to stop that generic per-route traffic
+  // limits don't specifically target. 10/min still comfortably covers a real user mistyping
+  // their password a few times.
+  fastify.post('/login', { config: { rateLimit: { max: 10, timeWindow: 60000 } } }, async (request, reply) => {
     try {
       const data = loginSchema.parse(request.body);
 
@@ -219,8 +237,8 @@ export default async function authRoutes(fastify: FastifyInstance) {
         return reply.status(401).send({ error: 'Invalid credentials' });
       }
 
-      if (!user.phoneVerified) {
-        return reply.status(403).send({ error: 'Phone number not verified' });
+      if (!user.emailVerified) {
+        return reply.status(403).send({ error: 'Email not verified' });
       }
 
       if (!user.passwordHash) {
@@ -258,6 +276,12 @@ export default async function authRoutes(fastify: FastifyInstance) {
         data: { lastActiveAt: new Date() },
       });
 
+      // The App Store review account resets to a blank, pre-onboarding state on every real
+      // login (not on token refresh) — see resetTestAccount's own comment for why.
+      if (user.isTestAccount) {
+        await resetTestAccount(prisma, user.id);
+      }
+
       // Generate tokens
       const accessToken = fastify.jwt.sign({ userId: user.id });
       const refreshToken = generateRefreshToken();
@@ -294,8 +318,8 @@ export default async function authRoutes(fastify: FastifyInstance) {
 
   // Sign in with Apple — logs in an existing Apple-linked (or matching-email) account. A brand
   // new identity with no matching account gets a distinct response telling the client to run
-  // through the normal signup form (still need phone/OTP, age, gender, fem attestation — Apple
-  // only ever replaces the password step, never the rest of this app's requirements).
+  // through the normal signup form (still need phone/email OTP, age, gender, fem attestation —
+  // Apple only ever replaces the password step, never the rest of this app's requirements).
   fastify.post('/apple', async (request, reply) => {
     try {
       const data = appleAuthSchema.parse(request.body);
@@ -303,7 +327,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
       let appleData;
       try {
         appleData = await appleSignin.verifyIdToken(data.identityToken, {
-          audience: process.env.APPLE_BUNDLE_ID || 'com.camdenheil.lumen',
+          audience: process.env.APPLE_BUNDLE_ID || 'com.lumenfem.dating',
         });
       } catch (err) {
         fastify.log.error(err);
@@ -332,8 +356,8 @@ export default async function authRoutes(fastify: FastifyInstance) {
         });
       }
 
-      if (!user.phoneVerified) {
-        return reply.status(403).send({ error: 'Phone number not verified' });
+      if (!user.emailVerified) {
+        return reply.status(403).send({ error: 'Email not verified' });
       }
 
       if (user.isSuspended) {

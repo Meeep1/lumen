@@ -12,15 +12,21 @@ struct ManagePhotosView: View {
     @State private var imageToCrop: UIImage?
     @State private var isUploading = false
     @State private var errorMessage: String?
+    @State private var appealingPhoto: Photo?
 
     var body: some View {
         NavigationStack {
+            VStack(spacing: 0) {
+            LumenHeader(title: "Manage Photos", trailing: {
+                LumenHeaderTextButton(title: "Done") { dismiss() }
+            })
             List {
                 ForEach(photos) { photo in
                     photoRow(photo)
                 }
                 .onMove(perform: move)
                 .onDelete(perform: delete)
+                .listRowBackground(Color.lumenCard)
 
                 if photos.count < 6 {
                     PhotosPicker(selection: $pickerItem, matching: .images) {
@@ -28,16 +34,14 @@ struct ManagePhotosView: View {
                             .foregroundColor(.pink)
                     }
                     .disabled(isUploading)
+                    .listRowBackground(Color.lumenCard)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(Color.lumenBackground)
             .environment(\.editMode, .constant(.active))
-            .navigationTitle("Manage Photos")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
             }
+            .toolbar(.hidden, for: .navigationBar)
             .task { await refresh() }
             .onChange(of: pickerItem) { _, newItem in
                 Task {
@@ -60,24 +64,32 @@ struct ManagePhotosView: View {
                 title: "Couldn't Update Photos",
                 message: errorMessage ?? ""
             )
+            .sheet(item: $appealingPhoto) { photo in
+                AppealComposerView(photo: photo) { message in
+                    await submitAppeal(photo: photo, message: message)
+                }
+            }
         }
     }
 
     private func photoRow(_ photo: Photo) -> some View {
         HStack(spacing: 12) {
-            AsyncImage(url: APIService.shared.imageURL(for: photo.url)) { image in
-                image.resizable().aspectRatio(contentMode: .fill)
-            } placeholder: {
-                Rectangle().fill(Color(uiColor: .systemGray5))
-            }
-            .frame(width: 56, height: 56)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+            Color.clear
+                .frame(width: 56, height: 56)
+                .overlay {
+                    AsyncImage(url: APIService.shared.imageURL(for: photo.url)) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        Rectangle().fill(Color.lumenSurfaceStrong)
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 10))
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(photo.order == 0 ? "Main Photo" : "Photo \(photo.order + 1)")
                     .font(.subheadline.weight(.medium))
 
-                statusBadge(for: photo.moderationStatus)
+                statusBadge(for: photo)
             }
 
             Spacer()
@@ -89,18 +101,40 @@ struct ManagePhotosView: View {
     }
 
     @ViewBuilder
-    private func statusBadge(for status: String?) -> some View {
-        switch status {
+    private func statusBadge(for photo: Photo) -> some View {
+        switch photo.moderationStatus {
         case "pending":
             Label("Under review", systemImage: "clock.fill")
                 .font(.caption2.weight(.medium))
                 .foregroundColor(.orange)
         case "rejected":
-            Label("Not approved", systemImage: "xmark.seal.fill")
-                .font(.caption2.weight(.medium))
-                .foregroundColor(.red)
+            VStack(alignment: .leading, spacing: 4) {
+                Label("Not approved", systemImage: "xmark.seal.fill")
+                    .font(.caption2.weight(.medium))
+                    .foregroundColor(.red)
+                appealControl(for: photo)
+            }
         default:
             EmptyView()
+        }
+    }
+
+    /// Only a photo the model auto-rejected (upload or rescan), never yet seen by a human, is
+    /// eligible — a manual admin reject or a denied appeal both already were that second look,
+    /// so `canAppeal` comes back false for both and no appeal option shows at all.
+    @ViewBuilder
+    private func appealControl(for photo: Photo) -> some View {
+        if photo.appealStatus == "pending" {
+            Text("Appeal submitted — awaiting review")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        } else if photo.canAppeal == true {
+            Button("Appeal this decision") { appealingPhoto = photo }
+                .font(.caption2.weight(.semibold))
+        } else {
+            Text("Reviewed by our team")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -168,6 +202,17 @@ struct ManagePhotosView: View {
         }
     }
 
+    private func submitAppeal(photo: Photo, message: String) async {
+        do {
+            try await APIService.shared.appealPhoto(photoId: photo.id, message: message.isEmpty ? nil : message)
+            appealingPhoto = nil
+            await refresh()
+        } catch {
+            appealingPhoto = nil
+            errorMessage = error.localizedDescription
+        }
+    }
+
     private func upload(_ image: UIImage) async {
         guard let jpegData = image.jpegData(compressionQuality: 0.85) else { return }
 
@@ -186,6 +231,48 @@ struct ManagePhotosView: View {
 private struct IdentifiableImage: Identifiable {
     let id = UUID()
     let image: UIImage
+}
+
+private struct AppealComposerView: View {
+    let photo: Photo
+    let onSubmit: (String) async -> Void
+
+    @Environment(\.dismiss) var dismiss
+    @State private var message = ""
+    @State private var isSubmitting = false
+
+    var body: some View {
+        ZStack {
+            Color.lumenBackground.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                LumenHeader(title: "Appeal Decision", leading: {
+                    LumenHeaderTextButton(title: "Cancel") { dismiss() }
+                }, trailing: {
+                    LumenHeaderTextButton(title: isSubmitting ? "Submitting…" : "Submit", isDisabled: isSubmitting) {
+                        isSubmitting = true
+                        Task { await onSubmit(message.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                    }
+                })
+
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Tell us why this photo should be reconsidered — optional, but it helps whoever reviews it.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    TextEditor(text: $message)
+                        .frame(height: 140)
+                        .padding(8)
+                        .background(Color.lumenSurface)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                    Spacer()
+                }
+                .padding()
+            }
+        }
+        .toolbar(.hidden, for: .navigationBar)
+    }
 }
 
 #Preview {

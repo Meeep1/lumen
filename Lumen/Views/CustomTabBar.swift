@@ -53,12 +53,12 @@ struct CustomTabBar: View {
         .padding(.top, 10)
         .padding(.bottom, 6)
         .background(alignment: .top) {
-            Color(uiColor: .systemBackground)
+            Color.lumenCard
                 .ignoresSafeArea(edges: .bottom)
                 .shadow(color: .black.opacity(0.06), radius: 12, y: -4)
                 .overlay(alignment: .top) {
                     Rectangle()
-                        .fill(Color(uiColor: .separator).opacity(0.3))
+                        .fill(Color.lumenDivider.opacity(0.6))
                         .frame(height: 0.5)
                 }
         }

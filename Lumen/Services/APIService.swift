@@ -215,9 +215,9 @@ class APIService {
         )
     }
     
-    func resendOTP(phone: String) async throws -> String {
+    func resendOTP(email: String) async throws -> String {
         struct Request: Codable {
-            let phone: String
+            let email: String
         }
         struct Response: Codable {
             let message: String
@@ -225,7 +225,7 @@ class APIService {
         let response: Response = try await self.request(
             endpoint: "/auth/resend-otp",
             method: "POST",
-            body: Request(phone: phone),
+            body: Request(email: email),
             requiresAuth: false
         )
         return response.message
@@ -314,6 +314,37 @@ class APIService {
         )
     }
 
+    /// Registers this device's APNs token with the backend so it knows where to send real push
+    /// notifications once the app is backgrounded/closed — see PushNotificationManager.swift.
+    func registerPushToken(_ token: String) async throws {
+        struct TokenBody: Codable {
+            let token: String
+            let platform: String
+        }
+        struct Response: Codable {
+            let message: String
+        }
+        let _: Response = try await request(
+            endpoint: "/profile/push-token",
+            method: "POST",
+            body: TokenBody(token: token, platform: "ios")
+        )
+    }
+
+    /// No auth — a crash can happen while logged out, or before a session even exists, and the
+    /// whole point of this endpoint is to still capture that. See CrashReporter.swift.
+    func reportDiagnostic(_ report: DiagnosticReport) async throws {
+        struct Response: Codable {
+            let message: String
+        }
+        let _: Response = try await request(
+            endpoint: "/diagnostics/report",
+            method: "POST",
+            body: report,
+            requiresAuth: false
+        )
+    }
+
     /// Uploads a photo as multipart/form-data — separate from the JSON `request` helper above
     /// since POST /profile/photos expects a file part, not a JSON body.
     func uploadPhoto(imageData: Data) async throws -> Photo {
@@ -360,6 +391,18 @@ class APIService {
         let _: Response = try await request(
             endpoint: "/profile/photos/\(photoId)",
             method: "DELETE"
+        )
+    }
+
+    /// A rejected photo is kept (not deleted) specifically so this has something to review —
+    /// see routes/moderation.ts. Message is optional context for the reviewer, not required.
+    func appealPhoto(photoId: String, message: String?) async throws {
+        struct Request: Codable { let message: String? }
+        struct Response: Codable { let message: String }
+        let _: Response = try await request(
+            endpoint: "/profile/photos/\(photoId)/appeal",
+            method: "POST",
+            body: Request(message: message)
         )
     }
 

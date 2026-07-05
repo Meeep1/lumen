@@ -15,6 +15,44 @@ struct ChatView: View {
     
     var body: some View {
         VStack(spacing: 0) {
+            LumenHeader(title: "", leading: {
+                LumenBackButton()
+            }, trailing: {
+                HStack(spacing: 12) {
+                    Button {
+                        showingProfile = true
+                    } label: {
+                        HStack(spacing: 6) {
+                            AsyncImage(url: APIService.shared.imageURL(for: match.photo)) { image in
+                                image.resizable().aspectRatio(contentMode: .fill)
+                            } placeholder: {
+                                Circle().fill(Color.lumenSurfaceStrong)
+                            }
+                            .frame(width: 28, height: 28)
+                            .clipShape(Circle())
+
+                            Text("\(match.age)")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+
+                            if match.isVerified {
+                                Image(systemName: "checkmark.seal.fill")
+                                    .font(.caption)
+                                    .foregroundColor(.blue)
+                            }
+                        }
+                    }
+                    .buttonStyle(LumenPressableStyle())
+
+                    Button {
+                        showingOptions = true
+                    } label: {
+                        Image(systemName: "ellipsis")
+                    }
+                    .buttonStyle(LumenIconButtonStyle())
+                }
+            })
+
             // Messages list
             ScrollViewReader { proxy in
                 ScrollView {
@@ -25,9 +63,14 @@ struct ChatView: View {
                                 isFromCurrentUser: message.senderId == authManager.currentUser?.id
                             )
                             .id(message.id)
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .bottom).combined(with: .opacity),
+                                removal: .opacity
+                            ))
                         }
                     }
                     .padding()
+                    .animation(.spring(response: 0.35, dampingFraction: 0.8), value: messages.count)
                 }
                 .onChange(of: messages.count) { _, _ in
                     if let lastMessage = messages.last {
@@ -37,66 +80,46 @@ struct ChatView: View {
                     }
                 }
             }
-            
-            Divider()
-            
-            // Message input
-            HStack(spacing: 12) {
-                TextField("Message...", text: $messageText, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .padding(8)
-                    .background(Color(uiColor: .systemGray6))
-                    .cornerRadius(20)
-                    .lineLimit(1...5)
-                
-                Button {
-                    Task {
-                        await sendMessage()
-                    }
-                } label: {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .resizable()
-                        .frame(width: 32, height: 32)
-                        .foregroundStyle(messageText.isEmpty ? .gray : .pink)
-                }
-                .disabled(messageText.isEmpty)
-            }
-            .padding()
         }
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Button {
-                    showingProfile = true
-                } label: {
-                    HStack(spacing: 6) {
-                        AsyncImage(url: APIService.shared.imageURL(for: match.photo)) { image in
-                            image.resizable().aspectRatio(contentMode: .fill)
-                        } placeholder: {
-                            Circle().fill(Color(uiColor: .systemGray5))
-                        }
-                        .frame(width: 28, height: 28)
-                        .clipShape(Circle())
+        // A plain trailing VStack child used to hold this instead — harmless on its own, but
+        // MainTabView's custom tab bar (a manual `.safeAreaInset`, not a native tabItem) stays
+        // reserved at the bottom for every pushed screen inside a tab, since it never got
+        // UIKit's automatic "hide tab bar when pushed" behavior. That left no room for this row
+        // to render at all while chatting — see TabBarVisibility for the other half of this fix.
+        // `.safeAreaInset` is also just the correct, keyboard-aware way to anchor a chat input bar
+        // regardless of that issue.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 0) {
+                Divider()
 
-                        Text("\(match.age)")
-                            .font(.headline)
-                            .foregroundColor(.primary)
+                HStack(spacing: 12) {
+                    TextField("Message...", text: $messageText, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .padding(8)
+                        .background(Color.lumenSurface)
+                        .cornerRadius(20)
+                        .lineLimit(1...5)
 
-                        if match.isVerified {
-                            Image(systemName: "checkmark.seal.fill")
-                                .font(.caption)
-                                .foregroundColor(.blue)
+                    Button {
+                        Task {
+                            await sendMessage()
                         }
+                    } label: {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .resizable()
+                            .frame(width: 32, height: 32)
+                            .foregroundStyle(messageText.isEmpty ? AnyShapeStyle(Color.gray) : AnyShapeStyle(Theme.primaryGradient))
                     }
+                    .buttonStyle(LumenPressableStyle())
+                    .disabled(messageText.isEmpty)
                 }
+                .padding()
             }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showingOptions = true
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
-            }
+            .background(Color.lumenBackground)
         }
+        .toolbar(.hidden, for: .navigationBar)
+        .onAppear { TabBarVisibility.shared.isHidden = true }
+        .onDisappear { TabBarVisibility.shared.isHidden = false }
         .customConfirmation(
             isPresented: $showingOptions,
             title: "Options",
@@ -196,25 +219,24 @@ struct MessageBubble: View {
                 if let content = message.content {
                     Text(content)
                         .padding(12)
-                        .background(isFromCurrentUser ? Color.pink : Color(uiColor: .systemGray5))
+                        .background(isFromCurrentUser ? AnyShapeStyle(Theme.primaryGradient) : AnyShapeStyle(Color.lumenSurfaceStrong))
                         .foregroundColor(isFromCurrentUser ? .white : .primary)
                         .cornerRadius(16)
                 }
-                
+
                 if let imageUrl = APIService.shared.imageURL(for: message.imageUrl) {
-                    AsyncImage(url: imageUrl) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Rectangle()
-                            .fill(Color(uiColor: .systemGray5))
-                            .overlay {
-                                ProgressView()
+                    Color.clear
+                        .frame(maxWidth: 200, maxHeight: 200)
+                        .overlay {
+                            AsyncImage(url: imageUrl) { image in
+                                image.resizable().scaledToFill()
+                            } placeholder: {
+                                Rectangle()
+                                    .fill(Color.lumenSurfaceStrong)
+                                    .overlay { ProgressView() }
                             }
-                    }
-                    .frame(maxWidth: 200, maxHeight: 200)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
                 
                 Text(message.createdAt, style: .time)

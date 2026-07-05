@@ -1,7 +1,9 @@
 import { FastifyInstance } from 'fastify';
 import type { WebSocket } from 'ws';
 import jwt from 'jsonwebtoken';
+import IORedis from 'ioredis';
 import { prisma, redis } from '../server';
+import { sendPushNotification } from '../utils/apns';
 
 // Plain WebSocket instead of Socket.IO — the socket.io-client-swift SPM package couldn't be
 // resolved in this environment's Xcode toolchain (headless package resolution never completed),
@@ -43,7 +45,33 @@ async function authenticateSocket(authHeader: string | undefined): Promise<strin
   }
 }
 
+/// The photo-moderation worker (src/worker.ts) runs as its own OS process — deliberately, so
+/// the 5-12s of blocking CPU work NSFWJS classification takes never stalls this process's event
+/// loop (see queue.ts). That means it has no access to `userSockets` above, which only exists in
+/// this process's memory; there's no way to call `sendToUser` directly from over there. Redis
+/// pub/sub bridges the gap: the worker publishes here once a photo's status is decided, and
+/// this process (which does hold the live socket) relays it via the exact same `sendToUser`
+/// path the admin's manual approve/reject already uses, so the client sees identical behavior
+/// regardless of which side made the decision.
+function subscribeToPhotoModerationEvents() {
+  const subscriber = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379');
+  subscriber.subscribe('photo-reviewed').catch((err) => {
+    console.error('Failed to subscribe to photo-reviewed channel:', err);
+  });
+  subscriber.on('message', (channel, message) => {
+    if (channel !== 'photo-reviewed') return;
+    try {
+      const { userId, photoId, status } = JSON.parse(message);
+      sendToUser(userId, 'photo_reviewed', { photoId, status });
+    } catch (err) {
+      console.error('Failed to handle photo-reviewed message:', err);
+    }
+  });
+}
+
 export function setupSocketHandlers(fastify: FastifyInstance) {
+  subscribeToPhotoModerationEvents();
+
   fastify.get('/ws', { websocket: true }, (socket, request) => {
     let userId: string | null = null;
 
@@ -133,8 +161,23 @@ export function setupSocketHandlers(fastify: FastifyInstance) {
             const otherUserId = match.userAId === currentUserId ? match.userBId : match.userAId;
             const isOnline = await redis.get(`user:${otherUserId}:online`);
             if (!isOnline) {
-              // TODO: Send push notification via APNs
-              console.log(`Send push notification to user ${otherUserId}`);
+              const recipient = await prisma.user.findUnique({
+                where: { id: otherUserId },
+                select: { notifyNewMessage: true, pushToken: true },
+              });
+              if (recipient?.notifyNewMessage && recipient.pushToken) {
+                const result = await sendPushNotification(recipient.pushToken, {
+                  title: 'New Message',
+                  body: content ? content.slice(0, 100) : 'Sent you a photo',
+                  data: { matchId },
+                });
+                if (!result.ok && result.reason === 'invalid-token') {
+                  await prisma.user.update({
+                    where: { id: otherUserId },
+                    data: { pushToken: null, pushPlatform: null },
+                  });
+                }
+              }
             }
             break;
           }

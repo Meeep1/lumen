@@ -4,10 +4,14 @@ import { authenticate } from '../middleware/auth';
 import { swipeSchema, zodErrorMessage } from '../utils/validation';
 import { getPresignedUrl } from '../utils/storage';
 import { calculateDistance } from '../utils/geo';
+import { notifyUser } from '../utils/notify';
 
 export default async function swipeRoutes(fastify: FastifyInstance) {
   // Create a swipe
-  fastify.post('/', { preHandler: authenticate }, async (request, reply) => {
+  // Generous enough for genuine rapid swiping (roughly one per second sustained) while still
+  // putting a real ceiling on a bot trying to exhaust the discovery pool or scrape profile data
+  // via repeated swipes.
+  fastify.post('/', { preHandler: authenticate, config: { rateLimit: { max: 60, timeWindow: 60000 } } }, async (request, reply) => {
     try {
       const data = swipeSchema.parse(request.body);
 
@@ -105,13 +109,31 @@ export default async function swipeRoutes(fastify: FastifyInstance) {
       }
 
       if (match) {
+        const otherUserId = match.userAId === request.userId ? match.userBId : match.userAId;
+
+        // Only the other participant needs telling — the requester already has the match
+        // result in this very response.
+        void notifyUser(
+          otherUserId,
+          'new_match',
+          { matchId: match.id },
+          { title: "It's a Match!", body: 'You have a new match on Lumen.', data: { matchId: match.id } }
+        );
+
         return reply.send({
           matched: true,
           matchId: match.id,
-          matchedUser: {
-            id: match.userAId === request.userId ? match.userBId : match.userAId,
-          },
+          matchedUser: { id: otherUserId },
         });
+      }
+
+      if (data.direction === 'like' || data.direction === 'super_like') {
+        void notifyUser(
+          data.swipedId,
+          'new_like',
+          {},
+          { title: 'New Like', body: 'Someone likes you on Lumen.' }
+        );
       }
 
       return reply.send({ matched: false });
@@ -265,14 +287,16 @@ export default async function swipeRoutes(fastify: FastifyInstance) {
   });
 }
 
+// UTC-consistent for the same reason as signupSchema's dateOfBirth check in validation.ts —
+// mixing local-timezone getters with a UTC-stored timestamp can shift the effective day by one.
 function calculateAge(dateOfBirth: Date): number {
   const today = new Date();
-  let age = today.getFullYear() - dateOfBirth.getFullYear();
-  const monthDiff = today.getMonth() - dateOfBirth.getMonth();
-  
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dateOfBirth.getDate())) {
+  let age = today.getUTCFullYear() - dateOfBirth.getUTCFullYear();
+  const monthDiff = today.getUTCMonth() - dateOfBirth.getUTCMonth();
+
+  if (monthDiff < 0 || (monthDiff === 0 && today.getUTCDate() < dateOfBirth.getUTCDate())) {
     age--;
   }
-  
+
   return age;
 }

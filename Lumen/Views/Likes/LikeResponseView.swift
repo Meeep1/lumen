@@ -13,41 +13,67 @@ struct LikeResponseView: View {
 
     var body: some View {
         NavigationStack {
+            VStack(spacing: 0) {
+            LumenHeader(title: "", leading: {
+                LumenBackButton(systemImage: "xmark")
+            })
             ScrollView {
                 VStack(spacing: 20) {
-                    AsyncImage(url: APIService.shared.imageURL(for: like.primaryPhoto)) { image in
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Rectangle()
-                            .fill(LinearGradient(
-                                colors: [.pink.opacity(0.3), .purple.opacity(0.3)],
-                                startPoint: .topLeading, endPoint: .bottomTrailing
-                            ))
-                    }
-                    .frame(height: 360)
-                    .clipped()
-                    .clipShape(RoundedRectangle(cornerRadius: 20))
-                    .padding(.horizontal)
+                    // Overlay pattern (see ProfileCardView): a `.fill` photo reports its
+                    // overflowed size to layout, and a wide photo here would inflate the whole
+                    // ScrollView's content width, shifting everything else off-center. Overlay
+                    // content is excluded from layout entirely.
+                    Color.clear
+                        .frame(height: 360)
+                        .overlay {
+                            AsyncImage(url: APIService.shared.imageURL(for: like.primaryPhoto)) { image in
+                                image.resizable().scaledToFill()
+                            } placeholder: {
+                                Rectangle()
+                                    .fill(LinearGradient(
+                                        colors: [.pink.opacity(0.3), .purple.opacity(0.3)],
+                                        startPoint: .topLeading, endPoint: .bottomTrailing
+                                    ))
+                            }
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: 20))
+                        .padding(.horizontal)
 
                     if like.likedPhotoUrl != nil || like.likedPromptQuestion != nil || like.message != nil {
                         likeContextCard
                     }
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("\(like.age)")
-                                .font(.title.bold())
-                            if like.isVerified {
-                                Image(systemName: "checkmark.seal.fill")
-                                    .foregroundColor(.blue)
-                            }
+                    HStack {
+                        Text("\(like.age)")
+                            .font(.system(.largeTitle, design: .rounded).bold())
+                        if like.isVerified {
+                            Image(systemName: "checkmark.seal.fill")
+                                .font(.title3)
+                                .foregroundStyle(.blue.gradient)
                         }
-                        if let bio = like.bio, !bio.isEmpty {
-                            Text(bio)
-                        }
+                        Spacer()
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal)
+
+                    statPills
+
+                    if like.jobTitle != nil || like.school != nil {
+                        detailsCard
+                    }
+
+                    if let bio = like.bio, !bio.isEmpty {
+                        Text(bio)
+                            .font(.body)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(16)
+                            .background(Color.lumenCard)
+                            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.medium))
+                            .padding(.horizontal)
+                    }
+
+                    if !like.styleTags.isEmpty {
+                        styleTagsCard
+                    }
 
                     if let errorMessage {
                         Text(errorMessage).foregroundStyle(.red).font(.caption)
@@ -56,25 +82,87 @@ struct LikeResponseView: View {
                 .padding(.bottom, 100)
             }
             .background(Color.lumenBackground)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                    }
-                }
-            }
             .safeAreaInset(edge: .bottom) {
                 responseButtons
             }
+            }
+            .toolbar(.hidden, for: .navigationBar)
             .overlay {
                 if matched {
                     matchOverlay
                 }
             }
         }
+    }
+
+    private var statPills: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                statPill(icon: "location.fill", text: "\(like.distance) mi")
+                if let heightDisplay = like.heightDisplay {
+                    statPill(icon: "ruler", text: heightDisplay)
+                }
+                if let pronouns = like.pronouns {
+                    statPill(icon: "person.fill", text: pronouns)
+                }
+                if let city = like.cityDisplay, !city.isEmpty {
+                    statPill(icon: "house.fill", text: city)
+                }
+            }
+            .padding(.horizontal)
+        }
+    }
+
+    private func statPill(icon: String, text: String) -> some View {
+        Label(text, systemImage: icon)
+            .font(.caption.weight(.medium))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(Color.pink.opacity(0.12))
+            .foregroundColor(.pink)
+            .clipShape(Capsule())
+    }
+
+    private var detailsCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let jobTitle = like.jobTitle, !jobTitle.isEmpty {
+                Label(jobTitle, systemImage: "briefcase.fill")
+                    .font(.subheadline)
+            }
+            if let school = like.school, !school.isEmpty {
+                Label(school, systemImage: "graduationcap.fill")
+                    .font(.subheadline)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(Color.lumenCard)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.medium))
+        .padding(.horizontal)
+    }
+
+    private var styleTagsCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Style")
+                .font(.headline)
+
+            FlowLayout(spacing: 8) {
+                ForEach(like.styleTags, id: \.self) { tag in
+                    Text(tag)
+                        .font(.caption)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.pink.opacity(0.2))
+                        .foregroundColor(.pink)
+                        .cornerRadius(16)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(Color.lumenCard)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.medium))
+        .padding(.horizontal)
     }
 
     private var likeContextCard: some View {
@@ -109,30 +197,35 @@ struct LikeResponseView: View {
     }
 
     private var responseButtons: some View {
-        HStack(spacing: 24) {
-            Button {
-                Task { await respond(.pass) }
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.title2.weight(.bold))
-                    .foregroundColor(.red)
-                    .frame(width: 56, height: 56)
-                    .background(.ultraThinMaterial, in: Circle())
-            }
+        VStack(spacing: 0) {
+            Divider()
 
-            Button {
-                Task { await respond(.like) }
-            } label: {
-                Image(systemName: "heart.fill")
-                    .font(.title2.weight(.bold))
-                    .foregroundColor(.white)
-                    .frame(width: 64, height: 64)
-                    .background(Color.pink.gradient, in: Circle())
+            HStack(spacing: 24) {
+                Button {
+                    Task { await respond(.pass) }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.title2.weight(.bold))
+                        .foregroundColor(.red)
+                        .frame(width: 56, height: 56)
+                        .background(Color.lumenSurface, in: Circle())
+                }
+
+                Button {
+                    Task { await respond(.like) }
+                } label: {
+                    Image(systemName: "heart.fill")
+                        .font(.title2.weight(.bold))
+                        .foregroundColor(.white)
+                        .frame(width: 64, height: 64)
+                        .background(Theme.primaryGradient, in: Circle())
+                }
             }
+            .buttonStyle(LumenPressableStyle())
+            .disabled(isResponding)
+            .padding()
         }
-        .disabled(isResponding)
-        .padding()
-        .background(.ultraThinMaterial)
+        .background(Color.lumenBackground)
     }
 
     private var matchOverlay: some View {
@@ -148,12 +241,7 @@ struct LikeResponseView: View {
                     onResponded()
                     dismiss()
                 }
-                .font(.headline)
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 56)
-                .background(Color.pink.gradient)
-                .cornerRadius(16)
+                .buttonStyle(LumenPrimaryButtonStyle())
                 .padding(.horizontal, 40)
                 .padding(.top, 8)
             }

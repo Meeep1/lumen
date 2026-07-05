@@ -13,12 +13,24 @@ struct OnboardingView: View {
     @State private var step: Step = .location
 
     var body: some View {
-        NavigationStack {
+        ZStack {
+            Color.lumenBackground.ignoresSafeArea()
+
             VStack(spacing: 0) {
+                // Location has no back button — behind it is just the auth flow, not a
+                // meaningful "previous step."
+                if step != .location {
+                    LumenHeader(title: "", leading: {
+                        LumenBackButton(action: goBack)
+                    })
+                } else {
+                    Color.clear.frame(height: 44)
+                }
+
                 ProgressView(value: Double(step.rawValue + 1), total: Double(Step.allCases.count))
                     .tint(.pink)
                     .padding(.horizontal)
-                    .padding(.top)
+                    .padding(.top, 8)
 
                 Group {
                     switch step {
@@ -39,22 +51,14 @@ struct OnboardingView: View {
                     }
                 }
                 .frame(maxHeight: .infinity)
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                // Location has no back button — behind it is just the auth flow, not a
-                // meaningful "previous step."
-                if step != .location {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button {
-                            goBack()
-                        } label: {
-                            Image(systemName: "chevron.left")
-                        }
-                    }
-                }
+                .transition(.asymmetric(
+                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                    removal: .move(edge: .leading).combined(with: .opacity)
+                ))
+                .id(step)
             }
         }
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: step)
     }
 
     private func advance() {

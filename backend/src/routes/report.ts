@@ -1,11 +1,15 @@
 import { FastifyInstance } from 'fastify';
 import { prisma } from '../server';
 import { authenticate, requireAdmin } from '../middleware/auth';
+import { requireBasicAuth } from '../middleware/basicAuth';
 import { reportSchema, zodErrorMessage } from '../utils/validation';
 
 export default async function reportRoutes(fastify: FastifyInstance) {
   // Create a report
-  fastify.post('/', { preHandler: authenticate }, async (request, reply) => {
+  // Spam-reporting is itself a harassment vector (mass-reporting someone to trigger review
+  // burden or an automated action against them) — capped well above what a real user filing a
+  // handful of legitimate reports in a sitting would ever hit.
+  fastify.post('/', { preHandler: authenticate, config: { rateLimit: { max: 15, timeWindow: 60000 } } }, async (request, reply) => {
     try {
       const data = reportSchema.parse(request.body);
 
@@ -49,7 +53,11 @@ export default async function reportRoutes(fastify: FastifyInstance) {
   });
 
   // Admin: Get all reports
-  fastify.get('/admin', { preHandler: [authenticate, requireAdmin] }, async (request, reply) => {
+  // requireBasicAuth first — this file mixes the public POST / above with these admin-only
+  // routes, so (unlike admin-tools.ts/moderation.ts, which are admin-only start to finish and
+  // get the gate at the whole-file registration level in server.ts) it's added directly here
+  // instead of wrapping the entire route file.
+  fastify.get('/admin', { preHandler: [requireBasicAuth, authenticate, requireAdmin] }, async (request, reply) => {
     try {
       const { status } = request.query as { status?: string };
 
@@ -89,7 +97,7 @@ export default async function reportRoutes(fastify: FastifyInstance) {
   });
 
   // Admin: Take action on a report
-  fastify.post('/admin/:reportId/action', { preHandler: [authenticate, requireAdmin] }, async (request, reply) => {
+  fastify.post('/admin/:reportId/action', { preHandler: [requireBasicAuth, authenticate, requireAdmin] }, async (request, reply) => {
     try {
       const { reportId } = request.params as { reportId: string };
       const { action, suspensionDays } = request.body as {

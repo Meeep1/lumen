@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { prisma } from '../server';
 import { authenticate, requireAdmin } from '../middleware/auth';
+import { requireBasicAuth } from '../middleware/basicAuth';
 import { uploadPhoto, getPresignedUrl } from '../utils/storage';
 
 export default async function verificationRoutes(fastify: FastifyInstance) {
@@ -69,7 +70,7 @@ export default async function verificationRoutes(fastify: FastifyInstance) {
   });
 
   // Admin: queue of pending verification requests
-  fastify.get('/admin', { preHandler: [authenticate, requireAdmin] }, async (request, reply) => {
+  fastify.get('/admin', { preHandler: [requireBasicAuth, authenticate, requireAdmin] }, async (request, reply) => {
     try {
       const { status } = request.query as { status?: string };
 
@@ -107,7 +108,7 @@ export default async function verificationRoutes(fastify: FastifyInstance) {
   });
 
   // Admin: approve/reject a verification request
-  fastify.post('/admin/:userId/action', { preHandler: [authenticate, requireAdmin] }, async (request, reply) => {
+  fastify.post('/admin/:userId/action', { preHandler: [requireBasicAuth, authenticate, requireAdmin] }, async (request, reply) => {
     try {
       const { userId } = request.params as { userId: string };
       const { action } = request.body as { action: 'approve' | 'reject' };

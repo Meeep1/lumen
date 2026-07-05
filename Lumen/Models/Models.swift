@@ -25,6 +25,9 @@ struct User: Codable, Identifiable {
     let cityDisplay: String?
     let isVerified: Bool
     let discoverable: Bool?
+    let notifyNewMatch: Bool?
+    let notifyNewMessage: Bool?
+    let notifyNewLike: Bool?
     let photos: [Photo]
 
     var displayName: String {
@@ -85,6 +88,12 @@ struct Photo: Codable, Identifiable {
     let url: String
     let order: Int
     let moderationStatus: String?
+    let appealStatus: String?
+    let appealMessage: String?
+    /// False (or absent, e.g. a freshly-uploaded photo) means either it's not rejected at all,
+    /// or a human already reviewed it (manual reject, or a previously denied appeal) — either
+    /// way, no appeal option should show.
+    let canAppeal: Bool?
 }
 
 // MARK: - Profile Models
@@ -111,6 +120,35 @@ struct ProfileUpdate: Codable {
     let longitude: Double?
     let cityDisplay: String?
     let discoverable: Bool?
+    let notifyNewMatch: Bool?
+    let notifyNewMessage: Bool?
+    let notifyNewLike: Bool?
+
+    init(
+        bio: String?, pronouns: String?, styleTags: [String]?, heightInches: Int?,
+        jobTitle: String?, school: String?, prompt1Question: String?, prompt1Answer: String?,
+        prompt2Question: String?, prompt2Answer: String?, latitude: Double?, longitude: Double?,
+        cityDisplay: String?, discoverable: Bool?,
+        notifyNewMatch: Bool? = nil, notifyNewMessage: Bool? = nil, notifyNewLike: Bool? = nil
+    ) {
+        self.bio = bio
+        self.pronouns = pronouns
+        self.styleTags = styleTags
+        self.heightInches = heightInches
+        self.jobTitle = jobTitle
+        self.school = school
+        self.prompt1Question = prompt1Question
+        self.prompt1Answer = prompt1Answer
+        self.prompt2Question = prompt2Question
+        self.prompt2Answer = prompt2Answer
+        self.latitude = latitude
+        self.longitude = longitude
+        self.cityDisplay = cityDisplay
+        self.discoverable = discoverable
+        self.notifyNewMatch = notifyNewMatch
+        self.notifyNewMessage = notifyNewMessage
+        self.notifyNewLike = notifyNewLike
+    }
 }
 
 // MARK: - Discovery Models
@@ -179,8 +217,14 @@ struct DiscoveryProfile: Codable, Identifiable {
         cityDisplay = user.cityDisplay
         isVerified = user.isVerified
         distance = 0
-        primaryPhoto = user.photos.first?.url
-        photos = user.photos
+        // GET /profile/me (unlike every real DiscoveryProfile-shaped response) deliberately
+        // returns every photo regardless of moderation status, so Edit Profile can show why a
+        // pending/rejected one isn't live — but that means unfiltered `user.photos` here would
+        // preview photos matches never actually see, defeating the entire point of "see what
+        // others see" (guaranteed to match, not just resemble, real discovery cards).
+        let approvedPhotos = user.photos.filter { $0.moderationStatus == "approved" }
+        primaryPhoto = approvedPhotos.first?.url
+        photos = approvedPhotos
     }
 }
 
@@ -244,6 +288,11 @@ struct LikeReceived: Codable, Identifiable {
     let likedPromptAnswer: String?
     let message: String?
     let likedAt: Date
+
+    var heightDisplay: String? {
+        guard let heightInches else { return nil }
+        return "\(heightInches / 12)'\(heightInches % 12)\""
+    }
 }
 
 struct MatchedUser: Codable {
@@ -321,7 +370,7 @@ enum AppleSignInOutcome {
 }
 
 struct VerifyOTPRequest: Codable {
-    let phone: String
+    let email: String
     let code: String
 }
 

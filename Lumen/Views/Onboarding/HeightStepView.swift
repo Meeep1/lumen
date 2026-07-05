@@ -34,6 +34,7 @@ struct HeightStepView: View {
                 }
                 .pickerStyle(.wheel)
             }
+            .tint(.pink)
             .frame(height: 160)
             .padding(.horizontal, 32)
 
@@ -50,22 +51,18 @@ struct HeightStepView: View {
                     Task { await save() }
                 } label: {
                     if isSaving {
-                        ProgressView().tint(.white).frame(maxWidth: .infinity).frame(height: 56)
+                        ProgressView().tint(.white)
                     } else {
                         Text("Continue")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 56)
                     }
                 }
-                .background(Color.pink.gradient)
-                .cornerRadius(16)
+                .buttonStyle(LumenPrimaryButtonStyle())
                 .disabled(isSaving)
 
                 Button("Skip", action: onSkip)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+                    .buttonStyle(LumenPressableStyle())
             }
             .padding(.horizontal, 32)
             .padding(.bottom, 32)

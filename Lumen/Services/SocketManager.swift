@@ -69,13 +69,6 @@ class SocketManager: ObservableObject {
         newTask.resume()
         listen()
         startKeepAlive()
-
-        // Local notifications only — there's no APNs/push infrastructure here (would need real
-        // Apple Developer credentials this environment doesn't have), so these only fire while
-        // this socket is actually connected (app open, or very recently backgrounded), not a
-        // true background push. Requesting again on every connect is harmless — the system
-        // only ever prompts once and silently no-ops after that.
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
     }
 
     func disconnect() {
@@ -189,6 +182,31 @@ class SocketManager: ObservableObject {
                 self.notifyPhotoReviewed(status: reviewed.status)
             }
 
+        case "photo_appeal_reviewed":
+            struct AppealReviewedPayload: Codable { let photoId: String; let outcome: String }
+            guard let reviewed = try? decoder.decode(AppealReviewedPayload.self, from: payloadData) else { return }
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .photoReviewed, object: nil)
+                if reviewed.outcome == "approved" {
+                    self.showLocalNotification(title: "Appeal Approved", body: "Your photo is back on your profile.")
+                } else {
+                    self.showLocalNotification(title: "Appeal Denied", body: "The original decision on your photo stands.")
+                }
+            }
+
+        // Live parity for a socket-connected recipient with what an offline user gets via a
+        // real push (see notifyUser() in backend/src/utils/notify.ts) — same on-device banner
+        // either way, just a different transport depending on whether the app is open.
+        case "new_match":
+            DispatchQueue.main.async {
+                self.showLocalNotification(title: "It's a Match!", body: "You have a new match on Lumen.")
+            }
+
+        case "new_like":
+            DispatchQueue.main.async {
+                self.showLocalNotification(title: "New Like", body: "Someone likes you on Lumen.")
+            }
+
         case "error":
             if let message = payload["message"] as? String {
                 print("Socket error from server: \(message)")
@@ -200,17 +218,20 @@ class SocketManager: ObservableObject {
     }
 
     private func notifyPhotoReviewed(status: String) {
-        let content = UNMutableNotificationContent()
         switch status {
         case "approved":
-            content.title = "Photo Approved"
-            content.body = "One of your photos is now live on your profile."
+            showLocalNotification(title: "Photo Approved", body: "One of your photos is now live on your profile.")
         case "rejected":
-            content.title = "Photo Removed"
-            content.body = "One of your photos didn't pass review and was removed."
+            showLocalNotification(title: "Photo Removed", body: "One of your photos didn't pass review and was removed.")
         default:
-            return
+            break
         }
+    }
+
+    private func showLocalNotification(title: String, body: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
         content.sound = .default
 
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)

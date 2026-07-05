@@ -11,6 +11,9 @@ struct ProfileCardView: View {
     /// decided early in the gesture and held for its duration so a drag can't flip categories
     /// partway through.
     @State private var isHorizontalDrag = false
+    /// Fires the "committed to swipe" haptic at most once per drag — without this it'd re-fire
+    /// on every frame the drag spends past the threshold.
+    @State private var hasTriggeredThresholdHaptic = false
 
     private let swipeThreshold: CGFloat = 100
     private let photoHeight: CGFloat = 420
@@ -21,12 +24,11 @@ struct ProfileCardView: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // Secondary (not primary) system background — the whole point is to be a visibly
-            // different, slightly darker tone than the white cards that float on top of it in
-            // infoSection, matching Hinge's "distinct rounded cards with gaps between them"
-            // look instead of one continuous white surface.
+            // A visibly different, slightly darker tone than the white cards that float on top
+            // of it in infoSection, matching Hinge's "distinct rounded cards with gaps between
+            // them" look instead of one continuous white surface.
             RoundedRectangle(cornerRadius: 24)
-                .fill(Color(uiColor: .secondarySystemBackground))
+                .fill(Color.lumenSurface)
                 .shadow(color: .black.opacity(0.16), radius: 24, y: 10)
 
             // Everything — every photo and the info below — lives in one scroll region, Hinge-
@@ -35,18 +37,27 @@ struct ProfileCardView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     ForEach(Array(profile.photos.enumerated()), id: \.element.id) { index, photo in
-                        AsyncImage(url: APIService.shared.imageURL(for: photo.url)) { image in
-                            image.resizable().aspectRatio(contentMode: .fill)
-                        } placeholder: {
-                            Rectangle()
-                                .fill(Color(uiColor: .systemGray5))
-                                .overlay { ProgressView() }
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: photoHeight)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .padding(.horizontal, 16)
-                        .padding(.top, index == 0 ? 16 : 0)
+                        // The photo lives in an .overlay of a fixed-size base rather than being
+                        // framed directly: `.fill` makes an image *report* its overflowed size to
+                        // layout, and in this vertical ScrollView a wide (landscape) photo's
+                        // reported width inflated the whole content column — the column re-centers,
+                        // pushing every leading-aligned sibling (the age row) off-screen left while
+                        // the photo spans past the card's rounded corners. Overlay content never
+                        // participates in layout, so no photo aspect ratio can distort the card.
+                        Color.clear
+                            .frame(height: photoHeight)
+                            .overlay {
+                                AsyncImage(url: APIService.shared.imageURL(for: photo.url)) { image in
+                                    image.resizable().scaledToFill()
+                                } placeholder: {
+                                    Rectangle()
+                                        .fill(Color.lumenSurfaceStrong)
+                                        .overlay { ProgressView() }
+                                }
+                            }
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .padding(.horizontal, 16)
+                            .padding(.top, index == 0 ? 16 : 0)
 
                         // First photo carries the name/basic-info row right under it, like a
                         // normal profile; the rest are just gallery images further down.
@@ -102,12 +113,34 @@ struct ProfileCardView: View {
                 }
                 guard isHorizontalDrag else { return }
                 offset = gesture.translation
-                rotation = Double(gesture.translation.width / 20)
+                // Clamped rather than unbounded — past a full-tilt drag, more distance shouldn't
+                // keep rotating the card further, it reads as more "off the rails" than "swipey".
+                rotation = Double(max(-12, min(12, gesture.translation.width / 20)))
+
+                let pastThreshold = abs(offset.width) > swipeThreshold
+                if pastThreshold && !hasTriggeredThresholdHaptic {
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    hasTriggeredThresholdHaptic = true
+                } else if !pastThreshold && hasTriggeredThresholdHaptic {
+                    hasTriggeredThresholdHaptic = false
+                }
             }
             .onEnded { gesture in
-                defer { isHorizontalDrag = false }
+                defer {
+                    isHorizontalDrag = false
+                    hasTriggeredThresholdHaptic = false
+                }
                 guard isHorizontalDrag else { return }
-                if abs(gesture.translation.width) > swipeThreshold {
+
+                // A quick short flick can carry as much "intent to swipe" as a slower drag that
+                // covers more raw distance — predictedEndTranslation factors in the gesture's
+                // velocity (where it'd end up if it kept decelerating naturally), so a fast flick
+                // commits the same way a full drag past swipeThreshold does, instead of requiring
+                // every swipe to physically cross the same fixed distance regardless of speed.
+                let committedByDistance = abs(gesture.translation.width) > swipeThreshold
+                let committedByVelocity = abs(gesture.predictedEndTranslation.width) > swipeThreshold * 2.5
+
+                if committedByDistance || committedByVelocity {
                     triggerSwipe(gesture.translation.width > 0 ? .like : .pass)
                 } else {
                     withAnimation(swipeAnimation) {
@@ -140,7 +173,7 @@ struct ProfileCardView: View {
                     .font(.body)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(16)
-                    .background(Color(uiColor: .systemBackground))
+                    .background(Color.lumenCard)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
             }
 
@@ -182,7 +215,7 @@ struct ProfileCardView: View {
                     }
                     .padding(12)
                 }
-                .background(Color(uiColor: .systemBackground))
+                .background(Color.lumenCard)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
             }
         }
@@ -227,7 +260,7 @@ struct ProfileCardView: View {
                 factRow(icon: "graduationcap.fill", text: school)
             }
         }
-        .background(Color(uiColor: .systemBackground))
+        .background(Color.lumenCard)
         .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 

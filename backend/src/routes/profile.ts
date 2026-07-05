@@ -1,8 +1,10 @@
 import { FastifyInstance } from 'fastify';
 import { prisma } from '../server';
 import { authenticate } from '../middleware/auth';
-import { updateProfileSchema, zodErrorMessage } from '../utils/validation';
-import { uploadPhoto, deletePhoto, moderateImage, getPresignedUrl } from '../utils/storage';
+import { updateProfileSchema, pushTokenSchema, zodErrorMessage } from '../utils/validation';
+import { uploadPhoto, deletePhoto, getPresignedUrl } from '../utils/storage';
+import { relocateSeedProfilesNear } from '../utils/testAccount';
+import { photoModerationQueue } from '../queue';
 
 export default async function profileRoutes(fastify: FastifyInstance) {
   // Get own profile
@@ -33,6 +35,12 @@ export default async function profileRoutes(fastify: FastifyInstance) {
           url: await getPresignedUrl(photo.url),
           order: photo.order,
           moderationStatus: photo.moderationStatus,
+          appealStatus: photo.appealStatus,
+          appealMessage: photo.appealMessage,
+          // A rejected photo is only appealable if no human has looked at it yet — auto-reject
+          // (upload or rescan) leaves rejectedByAdminId null; a manual reject or a denied
+          // appeal both set it, since either one already was a human's second look.
+          canAppeal: photo.moderationStatus === 'rejected' && !photo.rejectedByAdminId,
         }))
       );
 
@@ -59,6 +67,9 @@ export default async function profileRoutes(fastify: FastifyInstance) {
         cityDisplay: user.cityDisplay,
         isVerified: user.isVerified,
         discoverable: user.discoverable,
+        notifyNewMatch: user.notifyNewMatch,
+        notifyNewMessage: user.notifyNewMessage,
+        notifyNewLike: user.notifyNewLike,
         photos: photosWithUrls,
       });
     } catch (error) {
@@ -160,6 +171,14 @@ export default async function profileRoutes(fastify: FastifyInstance) {
         },
       });
 
+      // The test account's location is wiped on every login reset (see resetTestAccount) and
+      // set fresh during onboarding — re-anchor the seed profiles nearby right when that
+      // happens, since a reviewer could be testing from anywhere and a fixed seed location
+      // would mean Discovery/Likes You come up empty outside that one radius.
+      if (user.isTestAccount && data.latitude != null && data.longitude != null) {
+        await relocateSeedProfilesNear(prisma, data.latitude, data.longitude, user.cityDisplay);
+      }
+
       return reply.send({
         message: 'Profile updated',
         profile: {
@@ -171,16 +190,44 @@ export default async function profileRoutes(fastify: FastifyInstance) {
           longitude: user.longitude,
           cityDisplay: user.cityDisplay,
           discoverable: user.discoverable,
+          notifyNewMatch: user.notifyNewMatch,
+          notifyNewMessage: user.notifyNewMessage,
+          notifyNewLike: user.notifyNewLike,
         },
       });
     } catch (error: any) {
       fastify.log.error(error);
-      
+
       if (error.name === 'ZodError') {
         return reply.status(400).send({ error: zodErrorMessage(error) });
       }
-      
+
       return reply.status(500).send({ error: 'Failed to update profile' });
+    }
+  });
+
+  // Register (or replace) this device's APNs token — called after the client successfully
+  // registers for remote notifications. Re-registering with a new token (reinstall, token
+  // rotation) just overwrites the old one; there's only ever one active token per user since
+  // this app doesn't support being logged into multiple devices concurrently.
+  fastify.post('/push-token', { preHandler: authenticate }, async (request, reply) => {
+    try {
+      const data = pushTokenSchema.parse(request.body);
+
+      await prisma.user.update({
+        where: { id: request.userId },
+        data: { pushToken: data.token, pushPlatform: data.platform },
+      });
+
+      return reply.send({ message: 'Push token registered' });
+    } catch (error: any) {
+      fastify.log.error(error);
+
+      if (error.name === 'ZodError') {
+        return reply.status(400).send({ error: zodErrorMessage(error) });
+      }
+
+      return reply.status(500).send({ error: 'Failed to register push token' });
     }
   });
 
@@ -211,22 +258,25 @@ export default async function profileRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({ error: `Maximum ${maxPhotos} photos allowed` });
       }
 
-      // Moderate image
-      const moderation = await moderateImage(buffer);
-
-      // Upload to S3
+      // Upload to disk (or S3 in production)
       const photoKey = await uploadPhoto(buffer, request.userId!);
 
-      // Save to database
+      // Save to database — moderationStatus defaults to 'pending' (see schema.prisma). The
+      // actual NSFWJS classification happens off-request now (see queue.ts/worker.ts): it's
+      // 5-12s of blocking CPU work, and doing it inline here used to stall every *other* user's
+      // requests for that entire window on every single upload, since Node's event loop is
+      // single-threaded. The client already renders 'pending' as "Under review" and refreshes
+      // on its own; a `photo_reviewed` socket event fires once the worker reaches a final
+      // approved/rejected verdict (see socket/handlers.ts's photo-reviewed subscription).
       const photo = await prisma.photo.create({
         data: {
           userId: request.userId!,
           url: photoKey,
           order: photoCount,
-          moderationStatus: moderation.status,
-          moderationLabels: moderation.labels,
         },
       });
+
+      await photoModerationQueue.add('moderate', { photoId: photo.id });
 
       return reply.status(201).send({
         id: photo.id,
@@ -283,6 +333,52 @@ export default async function profileRoutes(fastify: FastifyInstance) {
     }
   });
 
+  // Appeal a rejected photo — rejected photos (auto or admin) are kept, not deleted, specifically
+  // so this has something to review (see routes/moderation.ts). One pending appeal at a time;
+  // a denied appeal can be resubmitted (e.g. with more context in the message) but an already-
+  // pending one can't be filed again on top of itself.
+  fastify.post('/photos/:photoId/appeal', { preHandler: authenticate }, async (request, reply) => {
+    try {
+      const { photoId } = request.params as { photoId: string };
+      const { message } = request.body as { message?: string };
+
+      const photo = await prisma.photo.findUnique({ where: { id: photoId } });
+      if (!photo) {
+        return reply.status(404).send({ error: 'Photo not found' });
+      }
+      if (photo.userId !== request.userId) {
+        return reply.status(403).send({ error: 'Unauthorized' });
+      }
+      if (photo.moderationStatus !== 'rejected') {
+        return reply.status(400).send({ error: 'Only a rejected photo can be appealed' });
+      }
+      if (photo.rejectedByAdminId) {
+        // A human already made this call (manual reject, or a previously denied appeal) —
+        // that already was the second look an appeal exists to get.
+        return reply.status(400).send({ error: 'This photo was already reviewed by a moderator and can\'t be appealed' });
+      }
+      if (photo.appealStatus === 'pending') {
+        return reply.status(400).send({ error: 'This photo already has a pending appeal' });
+      }
+
+      await prisma.photo.update({
+        where: { id: photoId },
+        data: {
+          appealStatus: 'pending',
+          appealMessage: message?.trim() || null,
+          appealCreatedAt: new Date(),
+          appealReviewedById: null,
+          appealReviewedAt: null,
+        },
+      });
+
+      return reply.status(201).send({ message: 'Appeal submitted' });
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: 'Failed to submit appeal' });
+    }
+  });
+
   // Reorder photos
   fastify.put('/photos/reorder', { preHandler: authenticate }, async (request, reply) => {
     try {
@@ -318,14 +414,16 @@ export default async function profileRoutes(fastify: FastifyInstance) {
   });
 }
 
+// UTC-consistent for the same reason as signupSchema's dateOfBirth check in validation.ts —
+// mixing local-timezone getters with a UTC-stored timestamp can shift the effective day by one.
 function calculateAge(dateOfBirth: Date): number {
   const today = new Date();
-  let age = today.getFullYear() - dateOfBirth.getFullYear();
-  const monthDiff = today.getMonth() - dateOfBirth.getMonth();
-  
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dateOfBirth.getDate())) {
+  let age = today.getUTCFullYear() - dateOfBirth.getUTCFullYear();
+  const monthDiff = today.getUTCMonth() - dateOfBirth.getUTCMonth();
+
+  if (monthDiff < 0 || (monthDiff === 0 && today.getUTCDate() < dateOfBirth.getUTCDate())) {
     age--;
   }
-  
+
   return age;
 }

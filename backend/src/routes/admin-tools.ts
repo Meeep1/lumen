@@ -6,8 +6,113 @@ import { FastifyInstance } from 'fastify';
 import { prisma } from '../server';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import { sendToUser } from '../socket/handlers';
+import { getPresignedUrl } from '../utils/storage';
 
 export default async function adminToolsRoutes(fastify: FastifyInstance) {
+  // Full profile for the admin site's "View Profile" modal — used both from the Reports tab
+  // (reviewing a reported user) and the Photos tab (context before approving/rejecting), so it
+  // returns everything a moderator might need in one call: every photo regardless of moderation
+  // status (unlike any user-facing profile query, which filters to approved-only), suspension
+  // state, and account metadata.
+  fastify.get('/users/:userId', { preHandler: [authenticate, requireAdmin] }, async (request, reply) => {
+    try {
+      const { userId } = request.params as { userId: string };
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: { photos: { orderBy: { order: 'asc' } } },
+      });
+
+      if (!user) {
+        return reply.status(404).send({ error: 'User not found' });
+      }
+
+      const photos = await Promise.all(
+        user.photos.map(async (photo) => ({
+          id: photo.id,
+          url: await getPresignedUrl(photo.url),
+          order: photo.order,
+          moderationStatus: photo.moderationStatus,
+          moderationLabels: photo.moderationLabels,
+        }))
+      );
+
+      return reply.send({
+        id: user.id,
+        email: user.email,
+        phone: user.phone,
+        dateOfBirth: user.dateOfBirth,
+        genderIdentity: user.genderIdentity,
+        genderIdentityOther: user.genderIdentityOther,
+        bio: user.bio,
+        pronouns: user.pronouns,
+        styleTags: user.styleTags,
+        heightInches: user.heightInches,
+        jobTitle: user.jobTitle,
+        school: user.school,
+        prompt1Question: user.prompt1Question,
+        prompt1Answer: user.prompt1Answer,
+        prompt2Question: user.prompt2Question,
+        prompt2Answer: user.prompt2Answer,
+        cityDisplay: user.cityDisplay,
+        isVerified: user.isVerified,
+        isSuspended: user.isSuspended,
+        suspendedUntil: user.suspendedUntil,
+        suspensionReason: user.suspensionReason,
+        isActive: user.isActive,
+        discoverable: user.discoverable,
+        createdAt: user.createdAt,
+        lastActiveAt: user.lastActiveAt,
+        photos,
+      });
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: 'Failed to fetch user profile' });
+    }
+  });
+
+  // Chat transcript between two users, for the Reports tab's "View chat" — only meaningful if
+  // they actually have a match; a report doesn't require one (you can report from a profile
+  // view without ever matching), so `hasMatch: false` is a normal, expected response, not an
+  // error.
+  fastify.get('/messages', { preHandler: [authenticate, requireAdmin] }, async (request, reply) => {
+    try {
+      const { userA, userB } = request.query as { userA?: string; userB?: string };
+      if (!userA || !userB) {
+        return reply.status(400).send({ error: 'userA and userB are required' });
+      }
+
+      const [userAId, userBId] = [userA, userB].sort();
+      const match = await prisma.match.findUnique({
+        where: { userAId_userBId: { userAId, userBId } },
+      });
+
+      if (!match) {
+        return reply.send({ hasMatch: false, messages: [] });
+      }
+
+      const messages = await prisma.message.findMany({
+        where: { matchId: match.id },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      return reply.send({
+        hasMatch: true,
+        unmatchedAt: match.unmatchedAt,
+        messages: messages.map((m) => ({
+          id: m.id,
+          senderId: m.senderId,
+          content: m.content,
+          imageUrl: m.imageUrl,
+          createdAt: m.createdAt,
+        })),
+      });
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: 'Failed to fetch messages' });
+    }
+  });
+
   // List seed/test accounts an admin can send a message "as".
   fastify.get('/test-accounts', { preHandler: [authenticate, requireAdmin] }, async (request, reply) => {
     try {

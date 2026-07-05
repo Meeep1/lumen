@@ -22,129 +22,151 @@ struct EditProfileView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    NavigationLink {
-                        ManagePhotosView()
-                    } label: {
-                        Label("Manage Photos", systemImage: "photo.on.rectangle.angled")
+        ZStack {
+            Color.lumenBackground.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                LumenHeader(title: "Edit Profile", leading: {
+                    LumenHeaderTextButton(title: "Cancel") { dismiss() }
+                }, trailing: {
+                    LumenHeaderTextButton(title: "Save", isDisabled: isSaving) {
+                        Task { await saveProfile() }
                     }
-                }
+                })
 
-                Section("About") {
-                    TextField("Bio", text: $bio, axis: .vertical)
-                        .lineLimit(5...10)
-
-                    TextField("Pronouns (e.g., she/her)", text: $pronouns)
-                }
-
-                Section("Details") {
-                    TextField("Job title", text: $jobTitle)
-                    TextField("School", text: $school)
-                }
-
-                Section("Height") {
-                    HStack {
-                        Picker("Feet", selection: $feet) {
-                            ForEach(4...7, id: \.self) { ft in
-                                Text("\(ft) ft").tag(ft)
-                            }
-                        }
-                        .pickerStyle(.wheel)
-
-                        Picker("Inches", selection: $inches) {
-                            ForEach(0...11, id: \.self) { inch in
-                                Text("\(inch) in").tag(inch)
-                            }
-                        }
-                        .pickerStyle(.wheel)
-                    }
-                    .frame(height: 120)
-                }
-
-                Section("Prompts") {
-                    promptEditor(question: $prompt1Question, answer: $prompt1Answer)
-                    promptEditor(question: $prompt2Question, answer: $prompt2Answer)
-                }
-
-                Section("Style Tags") {
-                    ForEach(styleTags, id: \.self) { tag in
-                        HStack {
-                            Text(tag)
-                            Spacer()
-                            Button {
-                                styleTags.removeAll { $0 == tag }
+                ScrollView {
+                    VStack(spacing: 20) {
+                        SettingsCard {
+                            NavigationLink {
+                                ManagePhotosView()
                             } label: {
-                                Image(systemName: "minus.circle.fill")
-                                    .foregroundColor(.red)
+                                SettingsRow(icon: "photo.on.rectangle.angled", title: "Manage Photos")
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        SettingsSection(title: "About") {
+                            SettingsCard {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    TextField("Bio", text: $bio, axis: .vertical)
+                                        .lineLimit(5...10)
+                                    Divider()
+                                    TextField("Pronouns (e.g., she/her)", text: $pronouns)
+                                }
+                                .padding(16)
+                            }
+                        }
+
+                        SettingsSection(title: "Details") {
+                            SettingsCard {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    TextField("Job title", text: $jobTitle)
+                                    Divider()
+                                    TextField("School", text: $school)
+                                }
+                                .padding(16)
+                            }
+                        }
+
+                        SettingsSection(title: "Height") {
+                            SettingsCard {
+                                HStack {
+                                    Picker("Feet", selection: $feet) {
+                                        ForEach(4...7, id: \.self) { ft in
+                                            Text("\(ft) ft").tag(ft)
+                                        }
+                                    }
+                                    .pickerStyle(.wheel)
+
+                                    Picker("Inches", selection: $inches) {
+                                        ForEach(0...11, id: \.self) { inch in
+                                            Text("\(inch) in").tag(inch)
+                                        }
+                                    }
+                                    .pickerStyle(.wheel)
+                                }
+                                .tint(.pink)
+                                .frame(height: 120)
+                            }
+                        }
+
+                        SettingsSection(title: "Prompts") {
+                            VStack(spacing: 12) {
+                                promptEditor(question: $prompt1Question, answer: $prompt1Answer)
+                                promptEditor(question: $prompt2Question, answer: $prompt2Answer)
+                            }
+                        }
+
+                        SettingsSection(title: "Style Tags") {
+                            SettingsCard {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    ForEach(styleTags, id: \.self) { tag in
+                                        HStack {
+                                            Text(tag)
+                                            Spacer()
+                                            Button {
+                                                styleTags.removeAll { $0 == tag }
+                                            } label: {
+                                                Image(systemName: "minus.circle.fill")
+                                                    .foregroundColor(.red)
+                                            }
+                                            .buttonStyle(LumenPressableStyle())
+                                        }
+                                    }
+
+                                    HStack {
+                                        TextField("Add a tag", text: $newTag)
+                                            .textFieldStyle(LumenTextFieldStyle())
+                                            .onSubmit {
+                                                addTag()
+                                            }
+
+                                        Button {
+                                            addTag()
+                                        } label: {
+                                            Image(systemName: "plus.circle.fill")
+                                                .foregroundColor(.pink)
+                                        }
+                                        .buttonStyle(LumenPressableStyle())
+                                        .disabled(newTag.isEmpty || styleTags.count >= 10)
+                                    }
+
+                                    Text("Add up to 10 tags that describe your style or vibe")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .padding(16)
                             }
                         }
                     }
-
-                    HStack {
-                        TextField("Add a tag", text: $newTag)
-                            .onSubmit {
-                                addTag()
-                            }
-
-                        Button {
-                            addTag()
-                        } label: {
-                            Image(systemName: "plus.circle.fill")
-                                .foregroundColor(.pink)
-                        }
-                        .disabled(newTag.isEmpty || styleTags.count >= 10)
-                    }
-
-                    Text("Add up to 10 tags that describe your style or vibe")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    .padding()
                 }
             }
-            .navigationTitle("Edit Profile")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        Task {
-                            await saveProfile()
-                        }
-                    }
-                    .fontWeight(.semibold)
-                    .disabled(isSaving)
-                }
-            }
-            .onAppear {
-                loadCurrentProfile()
-            }
-            .alert("Error", isPresented: $showingError) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text(errorMessage)
-            }
+        }
+        .toolbar(.hidden, for: .navigationBar)
+        .onAppear {
+            loadCurrentProfile()
+        }
+        .customAlert(isPresented: $showingError, title: "Error", message: errorMessage)
         }
     }
 
     private func promptEditor(question: Binding<PromptQuestion>, answer: Binding<String>) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Picker("Prompt", selection: question) {
-                ForEach(PromptQuestion.allCases, id: \.self) { q in
-                    Text(q.rawValue).tag(q)
-                }
-            }
-            .pickerStyle(.menu)
-            .tint(.pink)
+        SettingsCard {
+            VStack(alignment: .leading, spacing: 8) {
+                LumenSelectField(
+                    title: "Prompt",
+                    options: PromptQuestion.allCases,
+                    label: { $0.rawValue },
+                    selection: question
+                )
 
-            TextField("Your answer", text: answer, axis: .vertical)
-                .lineLimit(2...4)
+                TextField("Your answer", text: answer, axis: .vertical)
+                    .lineLimit(2...4)
+                    .textFieldStyle(LumenTextFieldStyle())
+            }
+            .padding(16)
         }
-        .padding(.vertical, 4)
     }
 
     private func loadCurrentProfile() {

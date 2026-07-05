@@ -16,6 +16,17 @@ struct MatchProfileView: View {
 
     var body: some View {
         NavigationStack {
+            VStack(spacing: 0) {
+            LumenHeader(title: "", leading: {
+                LumenBackButton(systemImage: "xmark")
+            }, trailing: {
+                Button {
+                    showingOptions = true
+                } label: {
+                    Image(systemName: "ellipsis")
+                }
+                .buttonStyle(LumenIconButtonStyle())
+            })
             ScrollView {
                 if let profile {
                     VStack(spacing: 20) {
@@ -51,23 +62,8 @@ struct MatchProfileView: View {
                 }
             }
             .background(Color.lumenBackground)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showingOptions = true
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                    }
-                }
             }
+            .toolbar(.hidden, for: .navigationBar)
             .customConfirmation(
                 isPresented: $showingOptions,
                 title: "Options",
@@ -117,18 +113,22 @@ struct MatchProfileView: View {
         ZStack(alignment: .bottom) {
             TabView {
                 ForEach(profile.photos) { photo in
-                    AsyncImage(url: APIService.shared.imageURL(for: photo.url)) { image in
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Rectangle()
-                            .fill(LinearGradient(
-                                colors: [.pink.opacity(0.3), .purple.opacity(0.3)],
-                                startPoint: .topLeading, endPoint: .bottomTrailing
-                            ))
-                            .overlay { ProgressView() }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .clipped()
+                    // Overlay pattern (see ProfileCardView): keeps a `.fill` photo's overflowed
+                    // size out of layout so a wide photo can't bleed past its own page.
+                    Color.clear
+                        .overlay {
+                            AsyncImage(url: APIService.shared.imageURL(for: photo.url)) { image in
+                                image.resizable().scaledToFill()
+                            } placeholder: {
+                                Rectangle()
+                                    .fill(LinearGradient(
+                                        colors: [.pink.opacity(0.3), .purple.opacity(0.3)],
+                                        startPoint: .topLeading, endPoint: .bottomTrailing
+                                    ))
+                                    .overlay { ProgressView() }
+                            }
+                        }
+                        .clipped()
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: profile.photos.count > 1 ? .always : .never))
@@ -206,7 +206,7 @@ struct MatchProfileView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding()
-                .background(Color(uiColor: .systemBackground))
+                .background(Color.lumenCard)
                 .cornerRadius(16)
                 .padding(.horizontal)
             }
@@ -222,7 +222,7 @@ struct MatchProfileView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
-        .background(Color(uiColor: .systemBackground))
+        .background(Color.lumenCard)
         .cornerRadius(16)
         .padding(.horizontal)
     }
@@ -270,7 +270,7 @@ struct MatchProfileView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
-        .background(Color(uiColor: .systemBackground))
+        .background(Color.lumenCard)
         .cornerRadius(16)
         .padding(.horizontal)
     }
@@ -288,46 +288,72 @@ struct ReportUserSheet: View {
     @State private var didSubmit = false
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Reason") {
-                    Picker("Reason", selection: $reason) {
-                        ForEach(ReportReason.allCases, id: \.self) { r in
-                            Text(r.displayName).tag(r)
-                        }
-                    }
-                    .pickerStyle(.inline)
-                    .labelsHidden()
-                }
+        ZStack {
+            Color.lumenBackground.ignoresSafeArea()
 
-                Section("Details (optional)") {
-                    TextField("Anything else we should know", text: $details, axis: .vertical)
-                        .lineLimit(3...6)
-                }
-
-                if let errorMessage {
-                    Text(errorMessage).foregroundStyle(.red).font(.caption)
-                }
-            }
-            .navigationTitle("Report")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Submit") {
+            VStack(spacing: 0) {
+                LumenHeader(title: "Report", leading: {
+                    LumenHeaderTextButton(title: "Cancel") { dismiss() }
+                }, trailing: {
+                    LumenHeaderTextButton(title: "Submit", isDisabled: isSubmitting) {
                         Task { await submit() }
                     }
-                    .disabled(isSubmitting)
+                })
+
+                ScrollView {
+                    VStack(spacing: 20) {
+                        SettingsSection(title: "Reason") {
+                            SettingsCard {
+                                ForEach(Array(ReportReason.allCases.enumerated()), id: \.element) { index, r in
+                                    if index > 0 {
+                                        Divider().padding(.leading, 16)
+                                    }
+                                    Button {
+                                        reason = r
+                                    } label: {
+                                        HStack {
+                                            Text(r.displayName)
+                                                .font(.subheadline)
+                                                .foregroundColor(.primary)
+                                            Spacer()
+                                            if reason == r {
+                                                Image(systemName: "checkmark")
+                                                    .font(.subheadline.weight(.semibold))
+                                                    .foregroundColor(.pink)
+                                            }
+                                        }
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 12)
+                                        .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(LumenPressableStyle(scale: 0.99))
+                                }
+                            }
+                        }
+
+                        SettingsSection(title: "Details (optional)") {
+                            SettingsCard {
+                                TextField("Anything else we should know", text: $details, axis: .vertical)
+                                    .lineLimit(3...6)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 12)
+                            }
+                        }
+
+                        if let errorMessage {
+                            Text(errorMessage).foregroundStyle(.red).font(.caption)
+                        }
+                    }
+                    .padding()
                 }
             }
-            .alert("Report Submitted", isPresented: $didSubmit) {
-                Button("OK") { dismiss() }
-            } message: {
-                Text("Thanks — our team will review it.")
-            }
         }
+        .customAlert(
+            isPresented: $didSubmit,
+            title: "Report Submitted",
+            message: "Thanks — our team will review it.",
+            onDismiss: { dismiss() }
+        )
     }
 
     private func submit() async {

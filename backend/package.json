@@ -5,16 +5,22 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "dev:worker": "tsx watch src/worker.ts",
     "build": "tsc",
     "start": "node dist/server.js",
+    "start:worker": "node dist/worker.js",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "seed": "tsx prisma/seed.ts",
     "seed:clean": "tsx prisma/seed-clean.ts",
-    "make-admin": "tsx scripts/make-admin.ts"
+    "make-admin": "tsx scripts/make-admin.ts",
+    "create-admin": "tsx scripts/create-admin.ts",
+    "create-test-account": "tsx scripts/create-test-account.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -34,13 +40,16 @@
     "@fastify/static": "^7.0.4",
     "@fastify/websocket": "^10.0.1",
     "@prisma/client": "^5.15.0",
+    "@sentry/node": "^10.63.0",
     "@tensorflow/tfjs": "^4.22.0",
     "apple-signin-auth": "^2.0.0",
     "argon2": "^0.31.2",
+    "bullmq": "^5.79.2",
     "dotenv": "^16.4.5",
     "fastify": "^4.27.0",
     "ioredis": "^5.4.1",
     "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^9.0.3",
     "nsfwjs": "^4.3.0",
     "sharp": "^0.35.3",
     "zod": "^3.23.8"
@@ -48,9 +57,12 @@
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.6",
     "@types/node": "^20.14.2",
+    "@types/nodemailer": "^8.0.1",
     "@types/ws": "^8.18.1",
+    "@vitest/coverage-v8": "^4.1.9",
     "prisma": "^5.15.0",
     "tsx": "^4.15.2",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "vitest": "^4.1.9"
   }
 }

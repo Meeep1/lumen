@@ -14,98 +14,109 @@ struct FilterSheet: View {
     @State private var selectedGenderIdentities: Set<String> = []
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Age Range") {
-                    VStack(spacing: 16) {
-                        HStack {
-                            Text("Min: \(Int(minAge))")
-                            Spacer()
-                            Text("Max: \(Int(maxAge))")
-                        }
-                        .font(.subheadline)
+        ZStack {
+            Color.lumenBackground.ignoresSafeArea()
 
-                        RangeSlider(
-                            minValue: $minAge,
-                            maxValue: $maxAge,
-                            bounds: 18...100
-                        )
-                    }
-                }
-
-                Section("Distance") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Max: \(Int(maxDistance)) miles")
-                            .font(.subheadline)
-
-                        Slider(value: $maxDistance, in: 1...500, step: 1)
-                    }
-                }
-
-                Section("Height Range") {
-                    VStack(spacing: 16) {
-                        HStack {
-                            Text("Min: \(heightLabel(minHeight))")
-                            Spacer()
-                            Text("Max: \(heightLabel(maxHeight))")
-                        }
-                        .font(.subheadline)
-
-                        RangeSlider(
-                            minValue: $minHeight,
-                            maxValue: $maxHeight,
-                            bounds: 48...96
-                        )
-                    }
-                }
-
-                Section("Gender Identity") {
-                    ForEach(GenderIdentity.allCases, id: \.self) { identity in
-                        Toggle(identity.displayName, isOn: Binding(
-                            get: { selectedGenderIdentities.contains(identity.rawValue) },
-                            set: { isOn in
-                                if isOn {
-                                    selectedGenderIdentities.insert(identity.rawValue)
-                                } else {
-                                    selectedGenderIdentities.remove(identity.rawValue)
-                                }
-                            }
-                        ))
-                    }
-                }
-
-                Section {
-                    Toggle("Verified profiles only", isOn: $verifiedOnly)
-                }
-
-                Section {
-                    Button("Reset to Defaults") {
-                        resetFilters()
-                    }
-                    .foregroundColor(.red)
-                }
-            }
-            .navigationTitle("Filters")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-                
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Apply") {
+            VStack(spacing: 0) {
+                LumenHeader(title: "Filters", leading: {
+                    LumenHeaderTextButton(title: "Cancel") { dismiss() }
+                }, trailing: {
+                    LumenHeaderTextButton(title: "Apply") {
                         applyFilters()
                         onApply()
                         dismiss()
                     }
-                    .fontWeight(.semibold)
+                })
+
+                ScrollView {
+                    VStack(spacing: 20) {
+                        SettingsSection(title: "Age Range") {
+                            SettingsCard {
+                                VStack(spacing: 16) {
+                                    HStack {
+                                        Text("Min: \(Int(minAge))")
+                                        Spacer()
+                                        Text("Max: \(Int(maxAge))")
+                                    }
+                                    .font(.subheadline)
+
+                                    RangeSlider(minValue: $minAge, maxValue: $maxAge, bounds: 18...100)
+                                }
+                                .padding(16)
+                            }
+                        }
+
+                        SettingsSection(title: "Distance") {
+                            SettingsCard {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Max: \(Int(maxDistance)) miles")
+                                        .font(.subheadline)
+                                    Slider(value: $maxDistance, in: 1...500, step: 1)
+                                        .tint(.pink)
+                                }
+                                .padding(16)
+                            }
+                        }
+
+                        SettingsSection(title: "Height Range") {
+                            SettingsCard {
+                                VStack(spacing: 16) {
+                                    HStack {
+                                        Text("Min: \(heightLabel(minHeight))")
+                                        Spacer()
+                                        Text("Max: \(heightLabel(maxHeight))")
+                                    }
+                                    .font(.subheadline)
+
+                                    RangeSlider(minValue: $minHeight, maxValue: $maxHeight, bounds: 48...96)
+                                }
+                                .padding(16)
+                            }
+                        }
+
+                        SettingsSection(title: "Gender Identity") {
+                            SettingsCard {
+                                ForEach(Array(GenderIdentity.allCases.enumerated()), id: \.element) { index, identity in
+                                    if index > 0 {
+                                        Divider().padding(.leading, 16)
+                                    }
+                                    Toggle(identity.displayName, isOn: Binding(
+                                        get: { selectedGenderIdentities.contains(identity.rawValue) },
+                                        set: { isOn in
+                                            if isOn {
+                                                selectedGenderIdentities.insert(identity.rawValue)
+                                            } else {
+                                                selectedGenderIdentities.remove(identity.rawValue)
+                                            }
+                                        }
+                                    ))
+                                    .tint(.pink)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 12)
+                                }
+                            }
+                        }
+
+                        SettingsCard {
+                            Toggle("Verified profiles only", isOn: $verifiedOnly)
+                                .tint(.pink)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                        }
+
+                        Button("Reset to Defaults") {
+                            resetFilters()
+                        }
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.red)
+                        .buttonStyle(LumenPressableStyle())
+                    }
+                    .padding()
                 }
             }
-            .onAppear {
-                loadCurrentFilters()
-            }
+        }
+        .onAppear {
+            loadCurrentFilters()
         }
     }
     

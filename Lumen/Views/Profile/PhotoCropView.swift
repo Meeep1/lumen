@@ -19,7 +19,19 @@ struct PhotoCropView: View {
     private var frameHeight: CGFloat { frameWidth / aspectRatio }
 
     var body: some View {
-        NavigationStack {
+        ZStack {
+            Color.lumenBackground.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                LumenHeader(title: "Adjust Photo", leading: {
+                    LumenHeaderTextButton(title: "Cancel") { dismiss() }
+                }, trailing: {
+                    LumenHeaderTextButton(title: "Use Photo") {
+                        onConfirm(renderCroppedImage())
+                        dismiss()
+                    }
+                })
+
             VStack(spacing: 24) {
                 Spacer()
 
@@ -67,22 +79,9 @@ struct PhotoCropView: View {
                 Spacer()
             }
             .frame(maxWidth: .infinity)
-            .background(Color.lumenBackground)
-            .navigationTitle("Adjust Photo")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Use Photo") {
-                        onConfirm(renderCroppedImage())
-                        dismiss()
-                    }
-                    .fontWeight(.semibold)
-                }
             }
         }
+        .toolbar(.hidden, for: .navigationBar)
     }
 
     @MainActor

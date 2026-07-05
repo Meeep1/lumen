@@ -27,6 +27,13 @@ enum ModerationStatus {
   rejected
 }
 
+enum AppealStatus {
+  none
+  pending
+  approved
+  denied
+}
+
 enum VerificationStatus {
   none
   pending
@@ -95,7 +102,26 @@ model User {
 
   isAdmin Boolean @default(false)
 
-  phoneVerified Boolean   @default(false)
+  // Marks the single account handed to App Store review — every real email/password login
+  // (see POST /auth/login) wipes this account's profile back to blank (no photos, no bio, no
+  // location) so a reviewer always sees the full onboarding flow, then re-anchors the seed
+  // profiles (`+seed@lumen.test`) near wherever the reviewer's device actually is once location
+  // is set, so Discovery/Likes You are never empty regardless of where review happens.
+  isTestAccount Boolean @default(false)
+
+  // APNs device token, sent by the client after successful remote-notification registration
+  // (see POST /profile/push-token). Only "ios" exists today, but the platform column is here
+  // so a future Android client doesn't need a schema change to add itself.
+  pushToken    String?
+  pushPlatform String?
+
+  notifyNewMatch   Boolean @default(true)
+  notifyNewMessage Boolean @default(true)
+  notifyNewLike    Boolean @default(true)
+
+  // OTP now goes to email, not phone (cheaper than SMS and doesn't need a per-country carrier
+  // integration) — phone is still collected at signup but no longer gates login.
+  emailVerified Boolean   @default(false)
   otpCode       String?
   otpExpiresAt  DateTime?
 
@@ -139,6 +165,21 @@ model Photo {
   // (upload or rescan), not append-only history.
   moderationLabels String[]          @default([])
   createdAt        DateTime          @default(now())
+
+  // Null when the current "rejected" status came from moderateImage() (upload or rescan) —
+  // set to the admin's id only when a human explicitly rejected it via the admin site. Gates
+  // appeal eligibility (see POST /profile/photos/:photoId/appeal): a model decision nobody's
+  // looked at yet is worth a second look, but a photo a human already reviewed and rejected
+  // isn't up for appeal — that review already was the second look.
+  rejectedByAdminId String?
+
+  // A rejected photo (auto or admin) is no longer deleted outright (see moderation.ts) —
+  // kept specifically so an appeal has something to review. "none" until the owner appeals.
+  appealStatus       AppealStatus @default(none)
+  appealMessage      String?
+  appealCreatedAt    DateTime?
+  appealReviewedById String?
+  appealReviewedAt   DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

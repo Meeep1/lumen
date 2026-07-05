@@ -127,13 +127,13 @@ class AuthenticationManager: ObservableObject {
         }
     }
     
-    func verifyOTP(phone: String, code: String) async -> Result<Void, Error> {
+    func verifyOTP(email: String, code: String) async -> Result<Void, Error> {
         isLoading = true
         errorMessage = nil
-        
+
         defer { isLoading = false }
-        
-        let request = VerifyOTPRequest(phone: phone, code: code)
+
+        let request = VerifyOTPRequest(email: email, code: code)
         
         do {
             let authResponse = try await APIService.shared.verifyOTP(request: request)
@@ -158,14 +158,14 @@ class AuthenticationManager: ObservableObject {
         }
     }
     
-    func resendOTP(phone: String) async -> Result<String, Error> {
+    func resendOTP(email: String) async -> Result<String, Error> {
         isLoading = true
         errorMessage = nil
-        
+
         defer { isLoading = false }
-        
+
         do {
-            let message = try await APIService.shared.resendOTP(phone: phone)
+            let message = try await APIService.shared.resendOTP(email: email)
             return .success(message)
         } catch {
             errorMessage = error.localizedDescription

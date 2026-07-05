@@ -9,6 +9,15 @@ struct ProfileView: View {
 
     var body: some View {
         NavigationStack {
+            VStack(spacing: 0) {
+            LumenHeader(title: "Profile", trailing: {
+                Button {
+                    showingSettings = true
+                } label: {
+                    Image(systemName: "gearshape.fill")
+                }
+                .buttonStyle(LumenIconButtonStyle())
+            })
             ScrollView {
                 if let user = authManager.currentUser {
                     VStack(spacing: 20) {
@@ -42,24 +51,21 @@ struct ProfileView: View {
                 }
             }
             .background(Color.lumenBackground)
-            .navigationTitle("Profile")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showingSettings = true
-                    } label: {
-                        Image(systemName: "gearshape.fill")
-                    }
-                }
             }
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showingEditProfile) {
                 EditProfileView()
             }
             .sheet(isPresented: $showingSettings) {
                 SettingsView()
             }
-            .sheet(isPresented: $showingPreview) {
+            // fullScreenCover, not .sheet — the whole point is to look exactly like a real
+            // discovery card (see ProfilePreviewView), and .sheet's card-style presentation
+            // (inset margins, rounded corners, system drag handle, background peeking through)
+            // both looks like a generic system modal instead and was the likely cause of the
+            // preview's layout coming out wrong intermittently — GeometryReader sizing racing
+            // with the sheet's own inset/spring transition, which fullScreenCover doesn't have.
+            .fullScreenCover(isPresented: $showingPreview) {
                 if let user = authManager.currentUser {
                     ProfilePreviewView(user: user)
                 }
@@ -130,18 +136,23 @@ struct ProfileView: View {
             } else {
                 TabView {
                     ForEach(photos) { photo in
-                        AsyncImage(url: APIService.shared.imageURL(for: photo.url)) { image in
-                            image.resizable().aspectRatio(contentMode: .fill)
-                        } placeholder: {
-                            Rectangle()
-                                .fill(LinearGradient(
-                                    colors: [.pink.opacity(0.3), .purple.opacity(0.3)],
-                                    startPoint: .topLeading, endPoint: .bottomTrailing
-                                ))
-                                .overlay { ProgressView() }
-                        }
-                        .frame(maxWidth: .infinity)
-                        .clipped()
+                        // Overlay pattern (see ProfileCardView): keeps a `.fill` photo's
+                        // overflowed size out of layout so a wide photo can't bleed past its
+                        // own page in the pager.
+                        Color.clear
+                            .overlay {
+                                AsyncImage(url: APIService.shared.imageURL(for: photo.url)) { image in
+                                    image.resizable().scaledToFill()
+                                } placeholder: {
+                                    Rectangle()
+                                        .fill(LinearGradient(
+                                            colors: [.pink.opacity(0.3), .purple.opacity(0.3)],
+                                            startPoint: .topLeading, endPoint: .bottomTrailing
+                                        ))
+                                        .overlay { ProgressView() }
+                                }
+                            }
+                            .clipped()
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: photos.count > 1 ? .always : .never))
@@ -251,7 +262,7 @@ struct ProfileView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding()
-                .background(Color(uiColor: .systemBackground))
+                .background(Color.lumenCard)
                 .cornerRadius(16)
                 .padding(.horizontal)
             }
@@ -267,7 +278,7 @@ struct ProfileView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
-        .background(Color(uiColor: .systemBackground))
+        .background(Color.lumenCard)
         .cornerRadius(16)
         .padding(.horizontal)
     }
@@ -315,7 +326,7 @@ struct ProfileView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
-        .background(Color(uiColor: .systemBackground))
+        .background(Color.lumenCard)
         .cornerRadius(16)
         .padding(.horizontal)
     }
@@ -328,7 +339,7 @@ struct ProfileView: View {
                 .font(.subheadline.weight(.semibold))
                 .frame(maxWidth: .infinity)
                 .frame(height: 50)
-                .background(Color(uiColor: .systemBackground))
+                .background(Color.lumenCard)
                 .foregroundColor(.pink)
                 .cornerRadius(16)
         }

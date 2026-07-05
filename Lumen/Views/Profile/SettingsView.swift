@@ -12,6 +12,10 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationStack {
+            VStack(spacing: 0) {
+            LumenHeader(title: "Settings", trailing: {
+                LumenHeaderTextButton(title: "Done") { dismiss() }
+            })
             ScrollView {
                 VStack(spacing: 24) {
                     SettingsCard {
@@ -54,6 +58,7 @@ struct SettingsView: View {
                         SettingsCard {
                             NavigationLink {
                                 NotificationPreferencesView()
+                                    .environmentObject(authManager)
                             } label: {
                                 SettingsRow(icon: "bell.fill", title: "Notification Preferences")
                             }
@@ -63,15 +68,21 @@ struct SettingsView: View {
 
                     SettingsSection(title: "About") {
                         SettingsCard {
-                            Link(destination: URL(string: "https://example.com/terms")!) {
+                            // Real pages now (backend/public/site/), served by the same backend
+                            // as everything else — no more example.com placeholders. Still the
+                            // dev LAN IP though, same as APIService.baseURL: swap all of these
+                            // (in one place, ideally a shared constant, if this grows past three
+                            // call sites) to the real production domain once Phase 3's actual
+                            // domain/TLS work lands.
+                            Link(destination: URL(string: "http://192.168.68.59:3000/terms")!) {
                                 SettingsRow(icon: "doc.text.fill", title: "Terms of Service")
                             }
                             Divider().padding(.leading, 52)
-                            Link(destination: URL(string: "https://example.com/privacy")!) {
+                            Link(destination: URL(string: "http://192.168.68.59:3000/privacy")!) {
                                 SettingsRow(icon: "hand.raised.fill", title: "Privacy Policy")
                             }
                             Divider().padding(.leading, 52)
-                            Link(destination: URL(string: "https://example.com/guidelines")!) {
+                            Link(destination: URL(string: "http://192.168.68.59:3000/community-guidelines")!) {
                                 SettingsRow(icon: "book.fill", title: "Community Guidelines")
                             }
                         }
@@ -86,9 +97,10 @@ struct SettingsView: View {
                                 .foregroundColor(.red)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 50)
-                                .background(Color(uiColor: .systemBackground))
+                                .background(Color.lumenCard)
                                 .clipShape(RoundedRectangle(cornerRadius: 14))
                         }
+                        .buttonStyle(LumenPressableStyle())
 
                         Button {
                             showingDeleteConfirmation = true
@@ -101,21 +113,15 @@ struct SettingsView: View {
                                 .background(Color.red.gradient)
                                 .clipShape(RoundedRectangle(cornerRadius: 14))
                         }
+                        .buttonStyle(LumenPressableStyle())
                     }
                 }
                 .padding(.horizontal)
                 .padding(.vertical, 20)
             }
             .background(Color.lumenBackground)
-            .navigationTitle("Settings")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
             }
+            .toolbar(.hidden, for: .navigationBar)
             .onAppear {
                 loadSettings()
             }
@@ -216,7 +222,7 @@ struct SettingsCard<Content: View>: View {
         VStack(spacing: 0) {
             content
         }
-        .background(Color(uiColor: .systemBackground))
+        .background(Color.lumenCard)
         .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 }
@@ -295,6 +301,10 @@ struct BlockedUsersView: View {
     @State private var isLoading = false
 
     var body: some View {
+        VStack(spacing: 0) {
+        LumenHeader(title: "Blocked Users", leading: {
+            LumenBackButton()
+        })
         ZStack {
             Color.lumenBackground
                 .ignoresSafeArea()
@@ -335,6 +345,7 @@ struct BlockedUsersView: View {
                                     }
                                     .font(.subheadline.weight(.semibold))
                                     .foregroundColor(.pink)
+                                    .buttonStyle(LumenPressableStyle())
                                 }
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 12)
@@ -345,8 +356,8 @@ struct BlockedUsersView: View {
                 }
             }
         }
-        .navigationTitle("Blocked Users")
-        .navigationBarTitleDisplayMode(.inline)
+        }
+        .toolbar(.hidden, for: .navigationBar)
         .task {
             await loadBlockedUsers()
         }
@@ -376,22 +387,36 @@ struct BlockedUsersView: View {
 // MARK: - Notification Preferences
 
 struct NotificationPreferencesView: View {
+    @EnvironmentObject var authManager: AuthenticationManager
     @State private var newMatchNotifications = true
     @State private var newMessageNotifications = true
     @State private var newLikeNotifications = true
 
     var body: some View {
+        VStack(spacing: 0) {
+        LumenHeader(title: "Notifications", leading: {
+            LumenBackButton()
+        })
         ScrollView {
             VStack(spacing: 16) {
                 SettingsCard {
                     SettingsToggleRow(icon: "heart.fill", title: "New Matches", isOn: $newMatchNotifications)
+                        .onChange(of: newMatchNotifications) { _, newValue in
+                            Task { await updatePreference(notifyNewMatch: newValue) }
+                        }
                     Divider().padding(.leading, 52)
                     SettingsToggleRow(icon: "message.fill", title: "New Messages", isOn: $newMessageNotifications)
+                        .onChange(of: newMessageNotifications) { _, newValue in
+                            Task { await updatePreference(notifyNewMessage: newValue) }
+                        }
                     Divider().padding(.leading, 52)
                     SettingsToggleRow(icon: "star.fill", title: "New Likes", isOn: $newLikeNotifications)
+                        .onChange(of: newLikeNotifications) { _, newValue in
+                            Task { await updatePreference(notifyNewLike: newValue) }
+                        }
                 }
 
-                Text("Notification preferences are stored on your device. You can also manage notifications in iOS Settings.")
+                Text("You can also manage notifications in iOS Settings.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 4)
@@ -399,8 +424,27 @@ struct NotificationPreferencesView: View {
             .padding()
         }
         .background(Color.lumenBackground)
-        .navigationTitle("Notifications")
-        .navigationBarTitleDisplayMode(.inline)
+        }
+        .toolbar(.hidden, for: .navigationBar)
+        .onAppear {
+            newMatchNotifications = authManager.currentUser?.notifyNewMatch ?? true
+            newMessageNotifications = authManager.currentUser?.notifyNewMessage ?? true
+            newLikeNotifications = authManager.currentUser?.notifyNewLike ?? true
+        }
+    }
+
+    private func updatePreference(
+        notifyNewMatch: Bool? = nil,
+        notifyNewMessage: Bool? = nil,
+        notifyNewLike: Bool? = nil
+    ) async {
+        let update = ProfileUpdate(
+            bio: nil, pronouns: nil, styleTags: nil, heightInches: nil, jobTitle: nil, school: nil,
+            prompt1Question: nil, prompt1Answer: nil, prompt2Question: nil, prompt2Answer: nil,
+            latitude: nil, longitude: nil, cityDisplay: nil, discoverable: nil,
+            notifyNewMatch: notifyNewMatch, notifyNewMessage: notifyNewMessage, notifyNewLike: notifyNewLike
+        )
+        _ = await authManager.updateProfile(update)
     }
 }
 

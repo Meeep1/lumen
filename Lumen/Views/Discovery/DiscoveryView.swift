@@ -7,6 +7,8 @@ struct DiscoveryView: View {
     @State private var showingFilters = false
     @State private var currentIndex = 0
     @State private var matchedProfile: DiscoveryProfile?
+    @State private var matchTextPop = false
+    @State private var matchPhotoPop = false
 
     // Filters
     @State private var filters = DiscoveryFilters()
@@ -18,6 +20,8 @@ struct DiscoveryView: View {
                     .ignoresSafeArea()
 
                 VStack(spacing: 0) {
+                    LumenHeader(title: "Discover")
+
                     filterPills
 
                     if isLoading {
@@ -33,8 +37,7 @@ struct DiscoveryView: View {
                     }
                 }
             }
-            .navigationTitle("Discover")
-            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showingFilters) {
                 FilterSheet(filters: $filters) {
                     Task {
@@ -62,10 +65,11 @@ struct DiscoveryView: View {
                     Image(systemName: "slider.horizontal.3")
                         .font(.subheadline.weight(.semibold))
                         .padding(10)
-                        .background(Color.pink.gradient)
+                        .background(Theme.primaryGradient)
                         .foregroundColor(.white)
                         .clipShape(Circle())
                 }
+                .buttonStyle(LumenPressableStyle())
                 .shadow(color: .pink.opacity(0.25), radius: 6, y: 3)
 
                 filterPill(title: "Age", value: filters.minAge != nil || filters.maxAge != nil
@@ -87,13 +91,14 @@ struct DiscoveryView: View {
                 .font(.subheadline.weight(.medium))
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
-                .background(value != nil ? AnyShapeStyle(Color.pink.gradient) : AnyShapeStyle(Color(uiColor: .secondarySystemBackground)))
+                .background(value != nil ? AnyShapeStyle(Theme.primaryGradient) : AnyShapeStyle(Color.lumenSurface))
                 .foregroundColor(value != nil ? .white : .primary)
                 .clipShape(Capsule())
                 .overlay(
                     Capsule().stroke(Color.pink.opacity(value != nil ? 0 : 0.15), lineWidth: 1)
                 )
         }
+        .buttonStyle(LumenPressableStyle())
     }
 
     private var emptyState: some View {
@@ -118,9 +123,10 @@ struct DiscoveryView: View {
                     .foregroundColor(.white)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 12)
-                    .background(Color.pink.gradient)
+                    .background(Theme.primaryGradient)
                     .clipShape(Capsule())
             }
+            .buttonStyle(LumenPressableStyle())
             .padding(.top, 8)
         }
         .padding()
@@ -142,6 +148,10 @@ struct DiscoveryView: View {
                         .offset(y: CGFloat(index - currentIndex) * 10)
                         .scaleEffect(1.0 - CGFloat(index - currentIndex) * 0.05)
                         .zIndex(Double(profiles.count - index))
+                        // Each card behind the top one animates into its new (offset, scale)
+                        // position once the card above it swipes away, instead of snapping —
+                        // reads as the stack settling rather than an abrupt jump.
+                        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: currentIndex)
                     }
                 }
             }
@@ -177,6 +187,9 @@ struct DiscoveryView: View {
                 withAnimation {
                     matchedProfile = profile
                 }
+                // First natural moment there's actually something worth notifying about —
+                // see PushNotificationManager for why this isn't requested at launch instead.
+                PushNotificationManager.shared.requestPermissionIfNeeded()
             }
 
             // Move to next profile
@@ -203,6 +216,8 @@ struct DiscoveryView: View {
                 Text("It's a Match!")
                     .font(.system(size: 36, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
+                    .scaleEffect(matchTextPop ? 1 : 0.6)
+                    .opacity(matchTextPop ? 1 : 0)
 
                 if let photoUrl = APIService.shared.imageURL(for: profile.primaryPhoto) {
                     AsyncImage(url: photoUrl) { image in
@@ -213,6 +228,8 @@ struct DiscoveryView: View {
                     .frame(width: 160, height: 160)
                     .clipShape(Circle())
                     .overlay(Circle().stroke(.white, lineWidth: 4))
+                    .scaleEffect(matchPhotoPop ? 1 : 0.4)
+                    .opacity(matchPhotoPop ? 1 : 0)
                 }
 
                 Text("You and \(profile.genderIdentity.displayName.lowercased()) matched. Say hi from the Matches tab!")
@@ -224,18 +241,23 @@ struct DiscoveryView: View {
                     withAnimation { matchedProfile = nil }
                 } label: {
                     Text("Keep Swiping")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 56)
-                        .background(Color.pink.gradient)
-                        .cornerRadius(16)
                 }
+                .buttonStyle(LumenPrimaryButtonStyle())
                 .padding(.horizontal, 40)
                 .padding(.top, 12)
             }
         }
         .transition(.opacity.combined(with: .scale(scale: 0.9)))
+        .onAppear {
+            matchTextPop = false
+            matchPhotoPop = false
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.6)) {
+                matchPhotoPop = true
+            }
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.65).delay(0.1)) {
+                matchTextPop = true
+            }
+        }
     }
 }
 

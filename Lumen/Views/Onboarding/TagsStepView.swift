@@ -45,7 +45,7 @@ struct TagsStepView: View {
 
                 HStack {
                     TextField("Add a tag", text: $newTag)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(LumenTextFieldStyle())
                         .onSubmit { addTag() }
 
                     Button {
@@ -54,6 +54,7 @@ struct TagsStepView: View {
                         Image(systemName: "plus.circle.fill")
                             .foregroundColor(.pink)
                     }
+                    .buttonStyle(LumenPressableStyle())
                     .disabled(newTag.isEmpty || styleTags.count >= 10)
                 }
             }
@@ -72,22 +73,18 @@ struct TagsStepView: View {
                     Task { await save() }
                 } label: {
                     if isSaving {
-                        ProgressView().tint(.white).frame(maxWidth: .infinity).frame(height: 56)
+                        ProgressView().tint(.white)
                     } else {
                         Text("Finish")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 56)
                     }
                 }
-                .background(Color.pink.gradient)
-                .cornerRadius(16)
+                .buttonStyle(LumenPrimaryButtonStyle())
                 .disabled(isSaving)
 
                 Button("Skip", action: onSkip)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+                    .buttonStyle(LumenPressableStyle())
             }
             .padding(.horizontal, 32)
             .padding(.bottom, 32)

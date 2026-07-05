@@ -4,12 +4,8 @@
 <dict>
 	<key>NSAppTransportSecurity</key>
 	<dict>
-		<!-- Local dev only: backend runs over plain HTTP on your LAN. Remove/tighten
-		     this before shipping anything that talks to a real HTTPS backend. -->
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Lumen uses your location to show you people nearby. Your exact location is never shown to other users — only your city and distance.</string>
 </dict>
 </plist>

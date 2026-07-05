@@ -35,22 +35,18 @@ struct PromptsStepView: View {
                         Task { await save() }
                     } label: {
                         if isSaving {
-                            ProgressView().tint(.white).frame(maxWidth: .infinity).frame(height: 56)
+                            ProgressView().tint(.white)
                         } else {
                             Text("Continue")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 56)
                         }
                     }
-                    .background(Color.pink.gradient)
-                    .cornerRadius(16)
+                    .buttonStyle(LumenPrimaryButtonStyle())
                     .disabled(isSaving)
 
                     Button("Skip", action: onSkip)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                        .buttonStyle(LumenPressableStyle())
                 }
                 .padding(.top, 8)
                 .padding(.bottom, 32)
@@ -63,22 +59,20 @@ struct PromptsStepView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title).font(.subheadline.weight(.medium))
 
-            Picker("Prompt", selection: question) {
-                ForEach(PromptQuestion.allCases, id: \.self) { q in
-                    Text(q.rawValue).tag(q)
-                }
-            }
-            .pickerStyle(.menu)
-            .tint(.pink)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            LumenSelectField(
+                title: "Prompt",
+                options: PromptQuestion.allCases,
+                label: { $0.rawValue },
+                selection: question
+            )
 
             TextField("Your answer", text: answer, axis: .vertical)
                 .lineLimit(2...4)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(LumenTextFieldStyle())
         }
         .padding()
-        .background(Color(uiColor: .systemGray6))
-        .cornerRadius(12)
+        .background(Color.lumenCard)
+        .cornerRadius(Theme.Radius.small)
     }
 
     private func save() async {

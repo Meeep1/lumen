@@ -18,14 +18,22 @@ export const signupSchema = z.object({
   // fem attestation) still applies the same either way; Apple only replaces the password step.
   password: z.string().min(8, 'Password must be at least 8 characters').optional(),
   appleIdentityToken: z.string().optional(),
+  // Compares using UTC components throughout, not local-timezone getters — a midnight-UTC DOB
+  // (the client sends dateOfBirth as an ISO string with a Z suffix) reads as the *previous
+  // evening* in any server timezone behind UTC (confirmed: new Date('2008-07-05T00:00:00Z')
+  // .getDate() returns 4, not 5, in US Eastern). That shifted someone's effective birthday
+  // back by a day, which could let a 17-year-old sign up up to a day before actually turning
+  // the minimum age. Mixing getUTC*() consistently for both dates removes the timezone entirely
+  // from the comparison instead of relying on it happening to cancel out.
   dateOfBirth: z.string().refine((date) => {
     const birthDate = new Date(date);
+    if (isNaN(birthDate.getTime())) return false;
     const today = new Date();
-    const age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
 
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-      return age - 1 >= MIN_AGE;
+    let age = today.getUTCFullYear() - birthDate.getUTCFullYear();
+    const monthDiff = today.getUTCMonth() - birthDate.getUTCMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getUTCDate() < birthDate.getUTCDate())) {
+      age--;
     }
 
     return age >= MIN_AGE;
@@ -41,8 +49,12 @@ export const signupSchema = z.object({
 });
 
 export const verifyOTPSchema = z.object({
-  phone: z.string(),
+  email: z.string().email(),
   code: z.string().length(6, 'OTP must be 6 digits'),
+});
+
+export const resendOTPSchema = z.object({
+  email: z.string().email(),
 });
 
 export const appleAuthSchema = z.object({
@@ -84,6 +96,14 @@ export const updateProfileSchema = z.object({
   longitude: z.number().min(-180).max(180).optional(),
   cityDisplay: z.string().max(100).optional(),
   discoverable: z.boolean().optional(),
+  notifyNewMatch: z.boolean().optional(),
+  notifyNewMessage: z.boolean().optional(),
+  notifyNewLike: z.boolean().optional(),
+});
+
+export const pushTokenSchema = z.object({
+  token: z.string().min(1),
+  platform: z.literal('ios'),
 });
 
 export const swipeSchema = z.object({

@@ -22,13 +22,13 @@ struct AboutStepView: View {
                     Text("Bio").font(.subheadline.weight(.medium))
                     TextField("A little about you", text: $bio, axis: .vertical)
                         .lineLimit(4...8)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(LumenTextFieldStyle())
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Pronouns").font(.subheadline.weight(.medium))
                     TextField("e.g. she/her, they/them", text: $pronouns)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(LumenTextFieldStyle())
                 }
             }
             .padding(.horizontal, 32)
@@ -46,22 +46,18 @@ struct AboutStepView: View {
                     Task { await save() }
                 } label: {
                     if isSaving {
-                        ProgressView().tint(.white).frame(maxWidth: .infinity).frame(height: 56)
+                        ProgressView().tint(.white)
                     } else {
                         Text("Continue")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 56)
                     }
                 }
-                .background(Color.pink.gradient)
-                .cornerRadius(16)
+                .buttonStyle(LumenPrimaryButtonStyle())
                 .disabled(isSaving)
 
                 Button("Skip", action: onSkip)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+                    .buttonStyle(LumenPressableStyle())
             }
             .padding(.horizontal, 32)
             .padding(.bottom, 32)

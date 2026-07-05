@@ -55,10 +55,25 @@ export function readPhoto(key: string): Buffer {
 
 export async function deletePhoto(key: string): Promise<void> {
   const filepath = path.join(UPLOADS_DIR, key);
-  
+
   if (fs.existsSync(filepath)) {
     fs.unlinkSync(filepath);
     console.log(`🗑️  Photo deleted: ${key}`);
+  }
+}
+
+/// Removes every file this user ever uploaded (profile photos + verification selfie) from disk.
+/// `DELETE /account` only removed the DB rows via Prisma's cascade relations — the files
+/// themselves were never cleaned up, so they stayed fetchable forever at their old
+/// `/uploads/...` URL (no ownership check on that static route) even after the account claiming
+/// to delete them was long gone. Safe to call even if a user never uploaded anything.
+export function deleteAllUserPhotos(userId: string): void {
+  for (const kind of ['photos', 'verification']) {
+    const userDir = path.join(UPLOADS_DIR, kind, userId);
+    if (fs.existsSync(userDir)) {
+      fs.rmSync(userDir, { recursive: true, force: true });
+      console.log(`🗑️  Removed ${kind} directory for user ${userId}`);
+    }
   }
 }
 
@@ -83,7 +98,9 @@ export function preloadModerationModel(): ReturnType<typeof nsfwjs.load> {
 }
 
 /// Three-tier policy based on the model's Porn/Hentai ("explicit") and Sexy ("suggestive")
-/// probabilities:
+/// probabilities. Deliberately NOT counting "Drawing" against anyone — that class means
+/// "this looks like an illustration/cartoon", not "this is explicit" (that's what Hentai is
+/// for), so a stylized/drawn avatar shouldn't be penalized just for being art.
 ///   - high-confidence explicit -> rejected outright, no human ever sees it
 ///   - borderline explicit, or high-confidence suggestive -> pending, queued for a human via
 ///     the admin site's Photos tab (backend/src/routes/moderation.ts)
@@ -93,10 +110,15 @@ export function preloadModerationModel(): ReturnType<typeof nsfwjs.load> {
 ///   - Pass 2: pending=0.35 (this file's previous version) — overcorrected. Two confirmed-clean
 ///     real photos scored Porn+Hentai at ~0.1-0.2%, but a confirmed-NSFW photo (rear nudity)
 ///     scored ~25% and still sailed through as approved, since 0.35 was well above it.
-///   - Pass 3 (current): the gap between confirmed-clean (~0.1-0.2%) and confirmed-bad
-///     (~17-25%) turned out to be much wider than pass 2 assumed, so pending dropped to 0.15 —
-///     comfortably above real clean photos, comfortably below both confirmed-bad examples.
-/// Still only ~4 confirmed real data points total (2 clean, 2 bad) — treat this as a working
+///   - Pass 3: pending=0.15 — comfortably above real clean photos (~0.1-0.2%), comfortably
+///     below both confirmed-bad examples known at the time (~17-25%).
+///   - Pass 4 (current): a real explicit photo (user-reported) scored Neutral 65% / Sexy 14% /
+///     Drawing 11% / Porn 7% (Hentai the remaining ~3%) — Porn+Hentai ≈ 0.10, *below* pass 3's
+///     0.15 threshold, so it sailed through approved. The model just isn't confident on every
+///     explicit photo; some score high Neutral despite being real nudity. Dropped pending to
+///     0.05 — still ~25x above the confirmed-clean baseline (~0.001-0.002), and comfortably
+///     below this new confirmed-bad example (~0.10).
+/// Still only ~5 confirmed real data points total (2 clean, 3 bad) — treat this as a working
 /// hypothesis that improves as the admin Photos queue collects more, not a solved problem.
 /// Sexy stayed conservative (0.5) since it tends to fire on plainly benign photos (swimwear,
 /// workout clothes) more readily than Porn/Hentai do, and no confirmed bad example so far has
@@ -125,16 +147,33 @@ export async function moderateImage(imageBytes: Buffer): Promise<{
 
   const explicitScore = scoreFor('Porn') + scoreFor('Hentai');
   const sexyScore = scoreFor('Sexy');
+  const drawingScore = scoreFor('Drawing');
 
   const rejectThreshold = parseFloat(process.env.MODERATION_REJECT_SCORE || '0.75');
-  const pendingThreshold = parseFloat(process.env.MODERATION_PENDING_SCORE || '0.15');
+  const pendingThreshold = parseFloat(process.env.MODERATION_PENDING_SCORE || '0.05');
   const sexyPendingThreshold = parseFloat(process.env.MODERATION_SEXY_PENDING_SCORE || '0.5');
+  const drawingLeewayThreshold = parseFloat(process.env.MODERATION_DRAWING_LEEWAY_SCORE || '0.15');
 
   const labels = predictions
     .filter((p) => p.probability >= 0.05)
     .map((p) => `${p.className} (${Math.round(p.probability * 100)}%)`);
 
-  if (explicitScore >= rejectThreshold) {
+  // Hentai's training data is anime/illustration-style art, so it fires on plenty of innocent
+  // stylized art and cartoon avatars too — not just genuinely explicit anime. Auto-rejecting on
+  // that signal alone means real art gets permanently deleted with no human ever looking at it.
+  //
+  // First attempt at this used `drawingScore > explicitScore` ("Drawing is the dominant class"),
+  // but all 5 classes sum to ~1, so once explicitScore crosses the 0.75 reject threshold,
+  // drawingScore is mathematically capped at ≤0.25 — that comparison could never be true at the
+  // exact point a reject would fire, making it dead code. Using an absolute floor instead: any
+  // meaningful Drawing signal (the model itself thinks there's a real chance this is illustrated,
+  // not photographed) caps the outcome at "pending" rather than "rejected" — still queued for
+  // review if it trips a threshold, a human just makes the final call instead of an instant
+  // auto-delete. A real photo of an actual person should score Drawing near zero regardless, so
+  // this shouldn't weaken protection against real explicit photos.
+  const looksLikeDrawing = drawingScore >= drawingLeewayThreshold;
+
+  if (explicitScore >= rejectThreshold && !looksLikeDrawing) {
     return { status: 'rejected', labels };
   }
   if (explicitScore >= pendingThreshold || sexyScore >= sexyPendingThreshold) {

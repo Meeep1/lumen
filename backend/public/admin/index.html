@@ -228,6 +228,17 @@
     background: #fbe9ee;
     color: var(--pink);
   }
+
+  /* --- Profile modal (Reports + Photos "View Profile") --- */
+  .modal-large { max-width: 720px; max-height: 85vh; overflow-y: auto; }
+  .profile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; font-size: 13px; margin: 12px 0; }
+  .profile-grid div { padding: 2px 0; }
+  .profile-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; margin: 12px 0; }
+  .profile-photos img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); }
+  .profile-photo-status { font-size: 10px; text-align: center; margin-top: 2px; }
+  .chat-log { max-height: 260px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-top: 8px; }
+  .chat-msg { font-size: 13px; margin-bottom: 8px; }
+  .chat-msg .meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
 </style>
 </head>
 <body>
@@ -254,6 +265,7 @@
       <button data-section="reports" class="active">Reports</button>
       <button data-section="verification">Verification</button>
       <button data-section="photos">Photos</button>
+      <button data-section="appeals">Appeals</button>
       <button data-section="test-tools">Test Tools</button>
     </div>
 
@@ -282,11 +294,22 @@
       <div class="tabs">
         <button data-pstatus="pending" class="active">Pending</button>
         <button data-pstatus="approved">Approved</button>
+        <button data-pstatus="rejected">Rejected</button>
         <button id="rescanBtn" class="ghost" style="margin-left:auto">Rescan Approved Photos</button>
         <button id="photosRefreshBtn" class="ghost">Refresh</button>
       </div>
       <div id="rescanStatus" class="tool-status"></div>
       <div id="photosGrid" class="mod-grid"></div>
+    </div>
+
+    <div id="appealsSection" class="hidden">
+      <div class="tabs">
+        <button data-astatus="pending" class="active">Pending</button>
+        <button data-astatus="approved">Approved</button>
+        <button data-astatus="denied">Denied</button>
+        <button id="appealsRefreshBtn" class="ghost" style="margin-left:auto">Refresh</button>
+      </div>
+      <div id="appealsGrid" class="mod-grid"></div>
     </div>
 
     <div id="testToolsSection" class="hidden">
@@ -343,6 +366,10 @@ const els = {
   rescanBtn: document.getElementById('rescanBtn'),
   rescanStatus: document.getElementById('rescanStatus'),
   photosTabs: document.querySelectorAll('.tabs button[data-pstatus]'),
+  appealsSection: document.getElementById('appealsSection'),
+  appealsGrid: document.getElementById('appealsGrid'),
+  appealsRefreshBtn: document.getElementById('appealsRefreshBtn'),
+  appealsTabs: document.querySelectorAll('.tabs button[data-astatus]'),
   testToolsSection: document.getElementById('testToolsSection'),
   testFromAccount: document.getElementById('testFromAccount'),
   testToEmail: document.getElementById('testToEmail'),
@@ -354,6 +381,7 @@ const els = {
 let activeStatus = '';
 let activeVerificationStatus = 'pending';
 let activePhotoStatus = 'pending';
+let activeAppealStatus = 'pending';
 
 function getTokens() {
   return {
@@ -482,12 +510,78 @@ els.sectionNav.forEach((btn) => {
     els.reportsSection.classList.toggle('hidden', section !== 'reports');
     els.verificationSection.classList.toggle('hidden', section !== 'verification');
     els.photosSection.classList.toggle('hidden', section !== 'photos');
+    els.appealsSection.classList.toggle('hidden', section !== 'appeals');
     els.testToolsSection.classList.toggle('hidden', section !== 'test-tools');
     if (section === 'verification') loadVerification();
     if (section === 'photos') loadPhotos();
+    if (section === 'appeals') loadAppeals();
     if (section === 'test-tools') loadTestAccounts();
   });
 });
+
+els.appealsTabs.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    els.appealsTabs.forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeAppealStatus = btn.dataset.astatus;
+    loadAppeals();
+  });
+});
+els.appealsRefreshBtn.addEventListener('click', loadAppeals);
+
+async function loadAppeals() {
+  els.appealsGrid.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const res = await authedFetch(`/moderation/appeals?status=${activeAppealStatus}`);
+    if (!res.ok) throw new Error('Failed to load appeals');
+    renderAppeals(await res.json());
+  } catch (err) {
+    els.appealsGrid.innerHTML = `<div class="empty">${err.message}</div>`;
+  }
+}
+
+function renderAppeals(data) {
+  const photos = data.photos || [];
+  if (photos.length === 0) {
+    els.appealsGrid.innerHTML = '<div class="empty">Nothing here.</div>';
+    return;
+  }
+
+  els.appealsGrid.innerHTML = photos.map((p) => `
+    <div class="mod-card">
+      <img src="${escapeAttr(p.url)}">
+      <div class="mod-card-body">
+        <div class="who">${escapeHtml(p.userEmail)}</div>
+        ${(p.labels && p.labels.length > 0) ? `
+          <div class="mod-labels">${p.labels.map((l) => `<span class="label-chip">${escapeHtml(l)}</span>`).join('')}</div>
+        ` : ''}
+        ${p.appealMessage ? `<div class="details" style="margin:8px 0">${escapeHtml(p.appealMessage)}</div>` : ''}
+        <div class="mod-actions" style="margin-bottom:8px">
+          <button class="ghost" onclick="openProfileModal('${p.userId}')">View profile</button>
+        </div>
+        ${p.appealStatus === 'pending' ? `
+          <div class="mod-actions">
+            <button class="approve" onclick="actOnAppeal('${p.id}', 'approve')">Approve appeal</button>
+            <button class="reject" onclick="actOnAppeal('${p.id}', 'deny')">Deny appeal</button>
+          </div>
+        ` : `<span class="status-badge status-approved">${p.appealStatus}</span>`}
+      </div>
+    </div>
+  `).join('');
+}
+
+window.actOnAppeal = async function (photoId, action) {
+  try {
+    const res = await authedFetch(`/moderation/appeals/${photoId}/action`, {
+      method: 'POST',
+      body: JSON.stringify({ action }),
+    });
+    if (!res.ok) throw new Error('Failed to submit decision');
+    loadAppeals();
+  } catch (err) {
+    alert(err.message);
+  }
+};
 
 els.photosTabs.forEach((btn) => {
   btn.addEventListener('click', () => {
@@ -501,16 +595,17 @@ els.photosRefreshBtn.addEventListener('click', loadPhotos);
 
 els.rescanBtn.addEventListener('click', async () => {
   els.rescanBtn.disabled = true;
-  els.rescanStatus.textContent = 'Rescanning every approved photo — this can take a while...';
+  els.rescanStatus.textContent = 'Queuing every approved photo for rescanning...';
   els.rescanStatus.className = 'tool-status';
   try {
     const res = await authedFetch('/moderation/rescan', { method: 'POST' });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Rescan failed');
 
-    els.rescanStatus.textContent = `Scanned ${data.totalScanned}: ${data.stillApproved} still approved, ${data.nowPending} moved to pending, ${data.nowRejected} rejected and removed.`;
-    els.rescanStatus.classList.add(data.nowPending + data.nowRejected > 0 ? 'error' : 'success');
-    if (activePhotoStatus === 'pending') loadPhotos();
+    // Runs on a background worker now, not inline — this just confirms the jobs were queued,
+    // not the outcome. Results show up in the Pending/Rejected tabs as the worker gets to them.
+    els.rescanStatus.textContent = data.message;
+    els.rescanStatus.classList.add('success');
   } catch (err) {
     els.rescanStatus.textContent = err.message;
     els.rescanStatus.classList.add('error');
@@ -545,6 +640,9 @@ function renderPhotos(data) {
         ${(p.labels && p.labels.length > 0) ? `
           <div class="mod-labels">${p.labels.map((l) => `<span class="label-chip">${escapeHtml(l)}</span>`).join('')}</div>
         ` : ''}
+        <div class="mod-actions" style="margin-bottom:8px">
+          <button class="ghost" onclick="openProfileModal('${p.userId}')">View profile</button>
+        </div>
         ${p.status === 'pending' ? `
           <div class="mod-actions">
             <button class="approve" onclick="actOnPhoto('${p.id}', 'approve')">Approve</button>
@@ -728,9 +826,12 @@ function renderReports(data) {
         Filed ${new Date(r.createdAt).toLocaleString()}
         ${r.actionTaken ? ` · Action taken: ${r.actionTaken}` : ''}
       </div>
-      ${r.status !== 'actioned' ? `<div style="margin-top:12px">
-        <button class="primary" onclick="openActionModal('${r.id}', '${escapeAttr(r.reported?.email || '')}')">Take action</button>
-      </div>` : ''}
+      <div style="margin-top:12px; display:flex; gap:8px">
+        <button class="ghost" onclick="openProfileModal('${r.reportedId}', '${r.reporterId}')">View profile &amp; chat</button>
+        ${r.status !== 'actioned' ? `
+          <button class="primary" onclick="openActionModal('${r.id}', '${escapeAttr(r.reported?.email || '')}')">Take action</button>
+        ` : ''}
+      </div>
     </div>
   `).join('');
 }
@@ -797,6 +898,95 @@ window.openActionModal = function (reportId, reportedEmail) {
 
 window.closeModal = function () {
   els.modalRoot.innerHTML = '';
+};
+
+// Shared by the Reports tab ("View profile & chat", passes chatWithUserId) and the Photos tab
+// ("View profile", no chat) — one modal, one endpoint, so a moderator always sees the same full
+// picture (every photo regardless of status, not just approved ones) before deciding anything.
+window.openProfileModal = async function (userId, chatWithUserId) {
+  els.modalRoot.innerHTML = `
+    <div class="overlay" onclick="if(event.target===this) closeModal()">
+      <div class="modal modal-large">
+        <h3>Profile</h3>
+        <div id="profileModalBody"><div class="empty">Loading…</div></div>
+        <div class="modal-actions">
+          <button class="ghost" onclick="closeModal()">Close</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const body = document.getElementById('profileModalBody');
+  try {
+    const res = await authedFetch(`/admin-tools/users/${userId}`);
+    if (!res.ok) throw new Error('Failed to load profile');
+    const u = await res.json();
+
+    const age = u.dateOfBirth
+      ? Math.floor((Date.now() - new Date(u.dateOfBirth).getTime()) / 31557600000)
+      : '?';
+
+    let html = `
+      <div class="profile-grid">
+        <div><b>Email:</b> ${escapeHtml(u.email)}</div>
+        <div><b>Phone:</b> ${escapeHtml(u.phone)}</div>
+        <div><b>Age:</b> ${age}</div>
+        <div><b>Gender:</b> ${escapeHtml(u.genderIdentity)}${u.genderIdentityOther ? ' (' + escapeHtml(u.genderIdentityOther) + ')' : ''}</div>
+        <div><b>City:</b> ${escapeHtml(u.cityDisplay || '—')}</div>
+        <div><b>Verified:</b> ${u.isVerified ? 'Yes' : 'No'}</div>
+        <div><b>Suspended:</b> ${u.isSuspended ? 'Yes' + (u.suspensionReason ? ' — ' + escapeHtml(u.suspensionReason) : '') : 'No'}</div>
+        <div><b>Active / Discoverable:</b> ${u.isActive ? 'Active' : 'Inactive'} / ${u.discoverable ? 'Discoverable' : 'Hidden'}</div>
+        <div><b>Joined:</b> ${new Date(u.createdAt).toLocaleDateString()}</div>
+        <div><b>Last active:</b> ${new Date(u.lastActiveAt).toLocaleString()}</div>
+      </div>
+      ${u.bio ? `<div><b>Bio:</b> ${escapeHtml(u.bio)}</div>` : ''}
+      ${u.pronouns ? `<div><b>Pronouns:</b> ${escapeHtml(u.pronouns)}</div>` : ''}
+      ${(u.styleTags && u.styleTags.length) ? `<div><b>Tags:</b> ${u.styleTags.map(escapeHtml).join(', ')}</div>` : ''}
+      ${u.jobTitle ? `<div><b>Job:</b> ${escapeHtml(u.jobTitle)}</div>` : ''}
+      ${u.school ? `<div><b>School:</b> ${escapeHtml(u.school)}</div>` : ''}
+      ${u.prompt1Question ? `<div style="margin-top:8px"><b>${escapeHtml(u.prompt1Question)}</b><br>${escapeHtml(u.prompt1Answer || '')}</div>` : ''}
+      ${u.prompt2Question ? `<div style="margin-top:8px"><b>${escapeHtml(u.prompt2Question)}</b><br>${escapeHtml(u.prompt2Answer || '')}</div>` : ''}
+      <div class="profile-photos">
+        ${(u.photos || []).map((p) => `
+          <div>
+            <img src="${escapeAttr(p.url)}">
+            <div class="profile-photo-status">${escapeHtml(p.moderationStatus)}</div>
+          </div>
+        `).join('') || '<div class="who">No photos.</div>'}
+      </div>
+    `;
+
+    if (chatWithUserId) {
+      html += `<h3>Chat with reporter</h3><div id="chatLog" class="chat-log">Loading…</div>`;
+    }
+
+    body.innerHTML = html;
+    if (!chatWithUserId) return;
+
+    const chatLog = document.getElementById('chatLog');
+    try {
+      const msgRes = await authedFetch(`/admin-tools/messages?userA=${userId}&userB=${chatWithUserId}`);
+      if (!msgRes.ok) throw new Error('Failed to load chat');
+      const msgData = await msgRes.json();
+
+      if (!msgData.hasMatch) {
+        chatLog.innerHTML = '<div class="who">No match between these two users.</div>';
+      } else if (msgData.messages.length === 0) {
+        chatLog.innerHTML = '<div class="who">Matched, but no messages sent.</div>';
+      } else {
+        chatLog.innerHTML = msgData.messages.map((m) => `
+          <div class="chat-msg">
+            <div>${m.senderId === userId ? '<b>Reported:</b> ' : '<b>Reporter:</b> '}${m.content ? escapeHtml(m.content) : '<i>[image]</i>'}</div>
+            <div class="meta">${new Date(m.createdAt).toLocaleString()}</div>
+          </div>
+        `).join('');
+      }
+    } catch (err) {
+      chatLog.innerHTML = `<div class="who">${err.message}</div>`;
+    }
+  } catch (err) {
+    body.innerHTML = `<div class="who">${err.message}</div>`;
+  }
 };
 
 // Auto-login if a token is already stashed from a previous session.

@@ -13,30 +13,34 @@ struct VerificationView: View {
     @State private var submitError: String?
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                if isLoading {
-                    ProgressView()
-                        .padding(.top, 60)
-                } else if let status {
-                    statusBadge(for: status)
+        VStack(spacing: 0) {
+            LumenHeader(title: "Get Verified", leading: {
+                LumenBackButton()
+            })
+            ScrollView {
+                VStack(spacing: 20) {
+                    if isLoading {
+                        ProgressView()
+                            .padding(.top, 60)
+                    } else if let status {
+                        statusBadge(for: status)
 
-                    if status.status == "approved" {
-                        Text("Your profile shows a verified badge to everyone who sees it.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 32)
-                    } else {
-                        submissionCard(status: status)
+                        if status.status == "approved" {
+                            Text("Your profile shows a verified badge to everyone who sees it.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 32)
+                        } else {
+                            submissionCard(status: status)
+                        }
                     }
                 }
+                .padding(.vertical, 24)
             }
-            .padding(.vertical, 24)
+            .background(Color.lumenBackground)
         }
-        .background(Color.lumenBackground)
-        .navigationTitle("Get Verified")
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
         .task { await load() }
         .onChange(of: pickerItem) { _, newItem in
             Task {
@@ -44,11 +48,11 @@ struct VerificationView: View {
                 selectedImageData = data
             }
         }
-        .alert("Couldn't Submit", isPresented: .constant(submitError != nil)) {
-            Button("OK") { submitError = nil }
-        } message: {
-            Text(submitError ?? "")
-        }
+        .customAlert(
+            isPresented: Binding(get: { submitError != nil }, set: { if !$0 { submitError = nil } }),
+            title: "Couldn't Submit",
+            message: submitError ?? ""
+        )
     }
 
     @ViewBuilder
@@ -74,23 +78,31 @@ struct VerificationView: View {
         VStack(spacing: 16) {
             ZStack {
                 RoundedRectangle(cornerRadius: 20)
-                    .fill(Color(uiColor: .systemBackground))
+                    .fill(Color.lumenCard)
                     .frame(height: 260)
 
                 if let selectedImageData, let uiImage = UIImage(data: selectedImageData) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
+                    // Overlay pattern (see ProfileCardView): a `.fill` image reports its
+                    // overflowed size to layout — a wide selfie would inflate this view's width.
+                    Color.clear
                         .frame(height: 260)
+                        .overlay {
+                            Image(uiImage: uiImage)
+                                .resizable()
+                                .scaledToFill()
+                        }
                         .clipShape(RoundedRectangle(cornerRadius: 20))
                 } else if let photoUrl = status.photoUrl, let url = APIService.shared.imageURL(for: photoUrl) {
-                    AsyncImage(url: url) { image in
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        ProgressView()
-                    }
-                    .frame(height: 260)
-                    .clipShape(RoundedRectangle(cornerRadius: 20))
+                    Color.clear
+                        .frame(height: 260)
+                        .overlay {
+                            AsyncImage(url: url) { image in
+                                image.resizable().scaledToFill()
+                            } placeholder: {
+                                ProgressView()
+                            }
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: 20))
                 } else {
                     VStack(spacing: 8) {
                         Image(systemName: "camera.fill")
@@ -109,10 +121,11 @@ struct VerificationView: View {
                     .font(.subheadline.weight(.semibold))
                     .frame(maxWidth: .infinity)
                     .frame(height: 48)
-                    .background(Color(uiColor: .systemBackground))
+                    .background(Color.lumenCard)
                     .foregroundColor(.pink)
                     .cornerRadius(14)
             }
+            .buttonStyle(LumenPressableStyle())
             .padding(.horizontal)
 
             Button {
@@ -120,18 +133,11 @@ struct VerificationView: View {
             } label: {
                 if isSubmitting {
                     ProgressView().tint(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
                 } else {
                     Text(status.status == "rejected" ? "Resubmit" : "Submit for Review")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
                 }
             }
-            .background(selectedImageData == nil ? AnyShapeStyle(Color.gray.opacity(0.4)) : AnyShapeStyle(Color.pink.gradient))
-            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .buttonStyle(LumenPrimaryButtonStyle(isEnabled: selectedImageData != nil))
             .disabled(selectedImageData == nil || isSubmitting)
             .padding(.horizontal)
 

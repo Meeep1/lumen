@@ -2,29 +2,36 @@ import SwiftUI
 
 @main
 struct LumenApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var authManager = AuthenticationManager.shared
     @StateObject private var socketManager = SocketManager.shared
 
     var body: some Scene {
         WindowGroup {
-            if authManager.isAuthenticated {
-                if let user = authManager.currentUser {
-                    if user.needsOnboarding {
-                        OnboardingView()
-                            .environmentObject(authManager)
+            Group {
+                if authManager.isAuthenticated {
+                    if let user = authManager.currentUser {
+                        if user.needsOnboarding {
+                            OnboardingView()
+                                .environmentObject(authManager)
+                        } else {
+                            MainTabView()
+                                .environmentObject(authManager)
+                                .environmentObject(socketManager)
+                        }
                     } else {
-                        MainTabView()
+                        SessionLoadingView()
                             .environmentObject(authManager)
-                            .environmentObject(socketManager)
                     }
                 } else {
-                    SessionLoadingView()
+                    AuthenticationView()
                         .environmentObject(authManager)
                 }
-            } else {
-                AuthenticationView()
-                    .environmentObject(authManager)
             }
+            // The whole app is designed as one light, white/warm-off-white look — locking the
+            // color scheme means it renders that way regardless of the device's system dark-mode
+            // setting, rather than needing every custom color to carry its own light/dark variant.
+            .preferredColorScheme(.light)
         }
     }
 }
@@ -38,33 +45,49 @@ private struct SessionLoadingView: View {
     @State private var showOptions = false
 
     var body: some View {
-        VStack(spacing: 20) {
-            ProgressView()
+        ZStack {
+            Color.lumenBackground
+                .ignoresSafeArea()
 
-            if showOptions {
-                Text("This is taking longer than expected.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+            VStack(spacing: 20) {
+                Image(systemName: "heart.circle.fill")
+                    .resizable()
+                    .frame(width: 80, height: 80)
+                    .foregroundStyle(Theme.primaryGradient)
 
-                Button {
-                    showOptions = false
-                    Task { await authManager.loadCurrentUser() }
-                } label: {
-                    Text("Try Again")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 12)
-                        .background(Color.pink.gradient)
-                        .clipShape(Capsule())
-                }
+                Text("Lumen")
+                    .font(.system(size: 36, weight: .bold, design: .rounded))
 
-                Button {
-                    Task { await authManager.logout() }
-                } label: {
-                    Text("Log Out")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundColor(.red)
+                ProgressView()
+                    .padding(.top, 8)
+
+                if showOptions {
+                    Text("This is taking longer than expected.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    Button {
+                        showOptions = false
+                        Task { await authManager.loadCurrentUser() }
+                    } label: {
+                        Text("Try Again")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 12)
+                            .background(Theme.primaryGradient)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(LumenPressableStyle())
+
+                    Button {
+                        Task { await authManager.logout() }
+                    } label: {
+                        Text("Log Out")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundColor(.red)
+                    }
+                    .buttonStyle(LumenPressableStyle())
                 }
             }
         }

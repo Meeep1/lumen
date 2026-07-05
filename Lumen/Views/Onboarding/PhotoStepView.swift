@@ -24,7 +24,7 @@ struct PhotoStepView: View {
 
             ZStack {
                 RoundedRectangle(cornerRadius: 20)
-                    .fill(Color(uiColor: .systemGray6))
+                    .fill(Color.lumenSurface)
                     .frame(width: 220, height: 280)
 
                 if let previewImage {
@@ -67,6 +67,7 @@ struct PhotoStepView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(.pink)
             }
+            .buttonStyle(LumenPressableStyle())
 
             if let errorMessage {
                 Text(errorMessage)
@@ -82,13 +83,8 @@ struct PhotoStepView: View {
                 onContinue()
             } label: {
                 Text("Continue")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 56)
             }
-            .background(uploadedPhoto != nil ? Color.pink.gradient : Color.gray.gradient)
-            .cornerRadius(16)
+            .buttonStyle(LumenPrimaryButtonStyle(isEnabled: uploadedPhoto != nil))
             .padding(.horizontal, 32)
             .disabled(uploadedPhoto == nil)
             .padding(.bottom, 32)

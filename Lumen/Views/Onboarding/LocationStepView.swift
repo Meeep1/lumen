@@ -15,7 +15,7 @@ struct LocationStepView: View {
             Image(systemName: "location.circle.fill")
                 .resizable()
                 .frame(width: 80, height: 80)
-                .foregroundStyle(.pink.gradient)
+                .foregroundStyle(Theme.primaryGradient)
 
             Text("Where are you?")
                 .font(.title.bold())
@@ -44,6 +44,7 @@ struct LocationStepView: View {
                         }
                     }
                     .font(.subheadline)
+                    .buttonStyle(LumenPressableStyle())
                 }
             }
 
@@ -57,17 +58,12 @@ struct LocationStepView: View {
                 }
             } label: {
                 if locationManager.isResolving || isSaving {
-                    ProgressView().tint(.white).frame(maxWidth: .infinity).frame(height: 56)
+                    ProgressView().tint(.white)
                 } else {
                     Text(locationManager.resolvedLocation != nil ? "Continue" : "Enable Location")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 56)
                 }
             }
-            .background(Color.pink.gradient)
-            .cornerRadius(16)
+            .buttonStyle(LumenPrimaryButtonStyle())
             .padding(.horizontal, 32)
             .disabled(locationManager.isResolving || isSaving)
             .padding(.bottom, 32)

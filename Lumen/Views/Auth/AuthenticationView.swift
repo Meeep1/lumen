@@ -15,79 +15,74 @@ struct AuthenticationView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 32) {
-                Spacer()
-                
-                // Logo and branding
-                VStack(spacing: 16) {
-                    Image(systemName: "heart.circle.fill")
-                        .resizable()
-                        .frame(width: 100, height: 100)
-                        .foregroundStyle(.pink.gradient)
-                    
-                    Text("Lumen")
-                        .font(.system(size: 48, weight: .bold, design: .rounded))
-                    
-                    Text("Fem-for-fem dating")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                }
-                
-                Spacer()
-                
-                // Buttons
-                VStack(spacing: 16) {
-                    NavigationLink(destination: SignupView()) {
-                        Text("Create Account")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 56)
-                            .background(Color.pink.gradient)
-                            .cornerRadius(16)
-                    }
-                    
-                    NavigationLink(destination: LoginView()) {
-                        Text("Log In")
-                            .font(.headline)
-                            .foregroundColor(.pink)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 56)
-                            .background(Color(uiColor: .systemGray6))
-                            .cornerRadius(16)
+            ZStack {
+                Color.lumenBackground.ignoresSafeArea()
+
+                VStack(spacing: 32) {
+                    Spacer()
+
+                    // Logo and branding
+                    VStack(spacing: 16) {
+                        Image(systemName: "heart.circle.fill")
+                            .resizable()
+                            .frame(width: 100, height: 100)
+                            .foregroundStyle(Theme.primaryGradient)
+
+                        Text("Lumen")
+                            .font(.system(size: 48, weight: .bold, design: .rounded))
+
+                        Text("Fem-for-fem dating")
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
                     }
 
-                    // Apple requires their own exact button (no custom styling/reskinning) per
-                    // their Human Interface Guidelines — this is the one native-looking control
-                    // in the app that's supposed to stay that way.
-                    SignInWithAppleButton(.signIn) { request in
-                        request.requestedScopes = [.email]
-                    } onCompletion: { result in
-                        handleAppleCompletion(result)
+                    Spacer()
+
+                    // Buttons
+                    VStack(spacing: 16) {
+                        NavigationLink(destination: SignupView()) {
+                            Text("Create Account")
+                        }
+                        .buttonStyle(LumenPrimaryButtonStyle())
+
+                        NavigationLink(destination: LoginView()) {
+                            Text("Log In")
+                        }
+                        .buttonStyle(LumenSecondaryButtonStyle())
+
+                        // Apple requires their own exact button (no custom styling/reskinning) per
+                        // their Human Interface Guidelines — this is the one native-looking control
+                        // in the app that's supposed to stay that way.
+                        SignInWithAppleButton(.signIn) { request in
+                            request.requestedScopes = [.email]
+                        } onCompletion: { result in
+                            handleAppleCompletion(result)
+                        }
+                        .signInWithAppleButtonStyle(.black)
+                        .frame(height: 56)
+                        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.medium))
                     }
-                    .signInWithAppleButtonStyle(.black)
-                    .frame(height: 56)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .padding(.horizontal, 32)
+                    .padding(.bottom, 48)
                 }
-                .padding(.horizontal, 32)
-                .padding(.bottom, 48)
             }
-        }
-        .customAlert(
-            isPresented: Binding(
-                get: { authManager.suspensionMessage != nil },
-                set: { if !$0 { authManager.suspensionMessage = nil } }
-            ),
-            title: "Account Suspended",
-            message: authManager.suspensionMessage ?? ""
-        )
-        .customAlert(
-            isPresented: Binding(get: { appleErrorMessage != nil }, set: { if !$0 { appleErrorMessage = nil } }),
-            title: "Couldn't Sign In",
-            message: appleErrorMessage ?? ""
-        )
-        .navigationDestination(item: $appleSignupInfo) { info in
-            SignupView(appleIdentityToken: info.identityToken, prefillEmail: info.email)
+            .toolbar(.hidden, for: .navigationBar)
+            .customAlert(
+                isPresented: Binding(
+                    get: { authManager.suspensionMessage != nil },
+                    set: { if !$0 { authManager.suspensionMessage = nil } }
+                ),
+                title: "Account Suspended",
+                message: authManager.suspensionMessage ?? ""
+            )
+            .customAlert(
+                isPresented: Binding(get: { appleErrorMessage != nil }, set: { if !$0 { appleErrorMessage = nil } }),
+                title: "Couldn't Sign In",
+                message: appleErrorMessage ?? ""
+            )
+            .navigationDestination(item: $appleSignupInfo) { info in
+                SignupView(appleIdentityToken: info.identityToken, prefillEmail: info.email)
+            }
         }
     }
 
