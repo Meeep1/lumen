@@ -64,14 +64,21 @@ Still genuinely open:
 
 ## Phase 3 — Fast-Follow / QoL (P2, v1.1–1.2)
 
-Materially improves the experience, fine to ship a few weeks after v1.0.
+**All six items done (2026-07-05, overnight while the account holder was out)** — three quick decisions were needed and made explicitly before starting (see below), everything else built and verified live against a real running backend, not just typechecked.
 
-- **Typing/online-status UI polish** — presence tracking already exists in Redis; surface "Active now"/"Active 2h ago" in chat and match list.
-- **Read receipts UI polish** — backend supports it; confirm `ChatView.swift` renders it well against the real (now-fixed) socket data.
-- **Message image sending UI** — confirm `ChatView.swift` has a working image picker gated on the existing 3-message unlock threshold, not just text.
-- **Undo last swipe** — common QoL feature, low complexity once swipe history is queryable (it already is).
-- **Onboarding drop-off analytics** — instrument step completion to see where users abandon onboarding (mandatory location/photo steps are the likely biggest drop points).
-- **Report reason follow-up notice** — a lightweight "thanks, we reviewed this" notification to a reporter after their report is actioned, to build trust that reports aren't going into a void.
+**Decisions made before starting** (asked directly, answered, then executed):
+1. Onboarding analytics — **self-hosted only**, no third-party SDK (the Privacy Policy already states none exist; a real analytics tool would have contradicted that).
+2. Undo-last-swipe when the swipe already caused a match — **blocked**, not allowed to auto-unmatch (avoids silently vanishing a match the other person already knows about).
+3. Chat image moderation — **skipped deliberately**, sent instantly with no NSFW pipeline (chat images are only ever seen by an already-matched, already-conversing recipient — a different exposure level than Discovery's stranger-facing profile photos).
+
+- ~~Typing/online-status UI polish~~ — **done.** `SocketManager` already tracked `typingUsers`, just had no UI consuming it; added a debounced send (stops after 3s idle or on send) and an animated `TypingIndicatorBubble` (built on `TimelineView`, not a manual `Timer`, so there's nothing to leak/invalidate across appear/disappear). Online status needed a new backend field: `GET /matches` now returns `isOnline` (same Redis key the socket layer already sets) and `lastActiveAt` per match; `MatchListView` shows a green dot on the avatar or "Active Xh ago".
+- ~~Read receipts UI polish~~ — turned out to be **fully unbuilt**, not just needing polish: `SocketManager`'s `"messages_read"` case was a literal no-op. Added a `lastReadReceipt` published property and wired `ChatView` to mark the sender's own messages read and show "Read" under the most recent one.
+- ~~Message image sending UI~~ — also **fully unbuilt**: no upload endpoint, no picker. Built `POST /matches/:matchId/messages/photo` (multipart, uploads and creates the message in one call, stored in its own `chat/{matchId}/` tree via a new `uploadChatImage()`) and a `PhotosPicker` button in `ChatView`. Also had to relax `sendMessageSchema`'s `imageUrl` from `.url()` to a plain string — every image URL in this app, including profile photos, is actually a host-relative path resolved client-side, not a real absolute URL, so the original validation would have rejected every real image message.
+- ~~Undo last swipe~~ — new `DELETE /swipe/last`, verified both the allowed path (no match yet) and the blocked path (already matched) against a real running server. `DiscoveryView`'s card stack already worked by index rather than removing cards, so undo is just decrementing `currentIndex` back by one.
+- ~~Onboarding drop-off analytics~~ — new `OnboardingEvent` model (one row per "user reached this step"), logged from `OnboardingView.swift`'s two existing chokepoints (`advance()`/`finish()`, no per-step-view changes needed), a new `analytics` admin permission, and a funnel view in the admin panel (`GET /admin-tools/onboarding-funnel`, counts distinct users per step). Verified live with a simulated 5→4→3→2→1→1→1→1 drop-off.
+- ~~Report reason follow-up notice~~ — reporter gets a notification (socket if online, push if offline) once their report is actioned, deliberately with no detail on what action was taken — matches the existing no-preference-toggle pattern already used for photo moderation outcomes.
+
+Also verified as a side effect of this work: all 14 `LumenTests` still pass, and both Debug/Release app builds are clean.
 
 ---
 
@@ -109,9 +116,9 @@ Bigger bets. Sequence based on real usage/retention data after v1.0-1.1, not pre
 Phase 1 (P0)  ── DONE. Ready to submit whenever you are.
 Phase 2 (P1)  ── Redis investigation, backups restore test, and iOS tests DONE.
                   S3 migration and managed Postgres/Redis still need your decision + credentials.
+Phase 3 (P2)  ── DONE (all six items). Ready to ship whenever you want, no need to wait for v1.1.
 
 Post-Launch
-  Phase 3 (P2 QoL)         ── v1.1–1.2, driven by real usage feedback
   Phase 4 (P3 new features)── v1.3+, driven by retention/engagement data and any monetization decision
 ```
 

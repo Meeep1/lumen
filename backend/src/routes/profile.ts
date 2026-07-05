@@ -231,6 +231,30 @@ export default async function profileRoutes(fastify: FastifyInstance) {
     }
   });
 
+  // Records one "user reached this onboarding step" event (see OnboardingView.swift's
+  // advance()/finish()) — self-hosted funnel tracking, not a third-party analytics SDK (see
+  // OnboardingEvent's own comment in schema.prisma for why). Deliberately fire-and-forget from
+  // the client's side and forgiving here: a step name typo or a missed event should never be
+  // something a user notices, so this fails soft (200 even on most edge cases) rather than
+  // surfacing errors for what's ultimately just internal instrumentation.
+  fastify.post('/onboarding-event', { preHandler: authenticate }, async (request, reply) => {
+    try {
+      const { step } = request.body as { step?: string };
+      if (!step || typeof step !== 'string' || step.length > 50) {
+        return reply.status(400).send({ error: 'Invalid step' });
+      }
+
+      await prisma.onboardingEvent.create({
+        data: { userId: request.userId!, step },
+      });
+
+      return reply.status(201).send({ recorded: true });
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: 'Failed to record event' });
+    }
+  });
+
   // Upload photo
   fastify.post('/photos', { preHandler: authenticate }, async (request, reply) => {
     try {

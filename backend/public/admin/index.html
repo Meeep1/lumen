@@ -277,6 +277,26 @@
   .checkbox-row { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
   .checkbox-row label { margin: 0; font-weight: 400 !important; }
   .checkbox-row input[type="checkbox"] { width: auto; margin: 0; }
+
+  /* --- Onboarding funnel --- */
+  .funnel-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+  .funnel-label { width: 100px; flex-shrink: 0; font-size: 13px; font-weight: 600; text-transform: capitalize; }
+  .funnel-bar-track { flex: 1; background: var(--bg); border-radius: 6px; overflow: hidden; height: 28px; }
+  .funnel-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--pink), #f0a3c0);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 8px;
+    color: white;
+    font-size: 12px;
+    font-weight: 700;
+    min-width: 36px;
+    box-sizing: border-box;
+    transition: width 0.3s ease;
+  }
+  .funnel-pct { width: 60px; flex-shrink: 0; text-align: right; font-size: 12px; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -305,6 +325,7 @@
       <button data-section="photos" data-permission="moderation">Photos</button>
       <button data-section="appeals" data-permission="moderation">Appeals</button>
       <button data-section="test-tools" data-permission="testTools">Test Tools</button>
+      <button data-section="analytics" data-permission="analytics">Analytics</button>
       <button data-section="team" data-permission="__superAdmin">Team</button>
     </div>
 
@@ -373,6 +394,17 @@
       </div>
     </div>
 
+    <div id="analyticsSection" class="hidden">
+      <div class="tabs">
+        <span style="font-size:13px;color:var(--muted)">
+          How far people get through onboarding before dropping off. Self-hosted — no data ever
+          leaves this server.
+        </span>
+        <button id="analyticsRefreshBtn" class="ghost" style="margin-left:auto">Refresh</button>
+      </div>
+      <div id="onboardingFunnel"></div>
+    </div>
+
     <div id="teamSection" class="hidden">
       <div class="tabs">
         <span style="font-size:13px;color:var(--muted)">Admins who can sign in to this panel.</span>
@@ -424,6 +456,9 @@ const els = {
   testMessageContent: document.getElementById('testMessageContent'),
   testSendBtn: document.getElementById('testSendBtn'),
   testToolsStatus: document.getElementById('testToolsStatus'),
+  analyticsSection: document.getElementById('analyticsSection'),
+  onboardingFunnel: document.getElementById('onboardingFunnel'),
+  analyticsRefreshBtn: document.getElementById('analyticsRefreshBtn'),
   teamSection: document.getElementById('teamSection'),
   teamList: document.getElementById('teamList'),
   addAdminBtn: document.getElementById('addAdminBtn'),
@@ -555,12 +590,14 @@ els.sectionNav.forEach((btn) => {
     els.photosSection.classList.toggle('hidden', section !== 'photos');
     els.appealsSection.classList.toggle('hidden', section !== 'appeals');
     els.testToolsSection.classList.toggle('hidden', section !== 'test-tools');
+    els.analyticsSection.classList.toggle('hidden', section !== 'analytics');
     els.teamSection.classList.toggle('hidden', section !== 'team');
     if (section === 'reports') loadReports();
     if (section === 'verification') loadVerification();
     if (section === 'photos') loadPhotos();
     if (section === 'appeals') loadAppeals();
     if (section === 'test-tools') loadTestAccounts();
+    if (section === 'analytics') loadOnboardingFunnel();
     if (section === 'team') loadTeam();
   });
 });
@@ -1042,6 +1079,42 @@ window.openProfileModal = async function (userId, chatWithUserId) {
   }
 };
 
+els.analyticsRefreshBtn.addEventListener('click', loadOnboardingFunnel);
+
+async function loadOnboardingFunnel() {
+  els.onboardingFunnel.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const res = await authedFetch('/admin-tools/onboarding-funnel');
+    if (!res.ok) throw new Error('Failed to load onboarding funnel');
+    renderOnboardingFunnel(await res.json());
+  } catch (err) {
+    els.onboardingFunnel.innerHTML = `<div class="empty">${err.message}</div>`;
+  }
+}
+
+function renderOnboardingFunnel(data) {
+  const funnel = data.funnel || [];
+  const startCount = funnel[0]?.userCount || 0;
+
+  if (startCount === 0) {
+    els.onboardingFunnel.innerHTML = '<div class="empty">No onboarding activity recorded yet.</div>';
+    return;
+  }
+
+  els.onboardingFunnel.innerHTML = funnel.map((entry) => {
+    const pct = startCount > 0 ? Math.round((entry.userCount / startCount) * 100) : 0;
+    return `
+      <div class="funnel-row">
+        <div class="funnel-label">${escapeHtml(entry.step)}</div>
+        <div class="funnel-bar-track">
+          <div class="funnel-bar-fill" style="width:${Math.max(pct, 4)}%">${entry.userCount}</div>
+        </div>
+        <div class="funnel-pct">${pct}%</div>
+      </div>
+    `;
+  }).join('');
+}
+
 els.addAdminBtn.addEventListener('click', () => openAdminModal());
 els.teamRefreshBtn.addEventListener('click', loadTeam);
 
@@ -1050,6 +1123,7 @@ const PERMISSION_LABELS = {
   verification: 'Verification',
   moderation: 'Photos & Appeals',
   testTools: 'Test Tools',
+  analytics: 'Analytics',
 };
 
 async function loadTeam() {

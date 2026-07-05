@@ -146,6 +146,8 @@ model User {
 
   blocksMade     Block[] @relation("BlocksMade")
   blocksReceived Block[] @relation("BlocksReceived")
+
+  onboardingEvents OnboardingEvent[]
 }
 
 model Photo {
@@ -308,4 +310,18 @@ model AdminUser {
   // Report.reviewedById: audit trail only, never joined on, and shouldn't block deleting the
   // creator later.
   createdById String?
+}
+
+// Self-hosted onboarding funnel tracking — deliberately not a third-party analytics SDK
+// (Amplitude/Mixpanel/etc.), since the Privacy Policy already states none exist. One row per
+// "user reached this step" event (see OnboardingView.swift's `advance()`/`finish()`), so an
+// admin can see where people actually drop off (GET /admin-tools/onboarding-funnel) without any
+// user data ever leaving this server.
+model OnboardingEvent {
+  id        String   @id @default(uuid())
+  userId    String
+  step      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

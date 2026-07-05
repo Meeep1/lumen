@@ -59,6 +59,15 @@ struct OnboardingView: View {
             }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: step)
+        .task {
+            // .onChange below only fires on a *change*, so the very first step needs its own
+            // log call here — see OnboardingEvent's own comment in schema.prisma for why this
+            // exists (self-hosted funnel tracking, not a third-party analytics SDK).
+            await APIService.shared.logOnboardingStep(String(describing: step))
+        }
+        .onChange(of: step) { _, newStep in
+            Task { await APIService.shared.logOnboardingStep(String(describing: newStep)) }
+        }
     }
 
     private func advance() {
@@ -75,7 +84,10 @@ struct OnboardingView: View {
     }
 
     private func finish() {
-        Task { await authManager.loadCurrentUser() }
+        Task {
+            await APIService.shared.logOnboardingStep("completed")
+            await authManager.loadCurrentUser()
+        }
     }
 }
 

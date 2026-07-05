@@ -2,9 +2,9 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '../server';
 
 /// Every distinct admin-panel capability that can be granted independently. Kept as a flat list
-/// (not nested/hierarchical) since the admin panel itself is just four sections — see
+/// (not nested/hierarchical) since the admin panel itself is just five sections — see
 /// routes/admin-auth.ts (team management, super-admin only) and each section's own route file.
-export const ADMIN_PERMISSIONS = ['moderation', 'reports', 'verification', 'testTools'] as const;
+export const ADMIN_PERMISSIONS = ['moderation', 'reports', 'verification', 'testTools', 'analytics'] as const;
 export type AdminPermission = (typeof ADMIN_PERMISSIONS)[number];
 
 /// Verifies the JWT was issued to an AdminUser, not a regular User — both share the same JWT

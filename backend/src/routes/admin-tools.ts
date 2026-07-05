@@ -197,4 +197,37 @@ export default async function adminToolsRoutes(fastify: FastifyInstance) {
       return reply.status(500).send({ error: 'Failed to send test message' });
     }
   });
+
+  // Fixed order matching OnboardingView.swift's `Step` enum (plus the synthetic "completed"
+  // event `finish()` logs) — not just whatever order happens to show up in the DB, so the
+  // funnel always reads top-to-bottom the same way a real user actually walks through it.
+  const ONBOARDING_STEP_ORDER = ['location', 'photo', 'about', 'height', 'details', 'prompts', 'tags', 'completed'];
+
+  // Self-hosted onboarding funnel — see OnboardingEvent's own comment in schema.prisma for why
+  // this exists instead of a third-party analytics SDK. Counts distinct *users* who reached each
+  // step, not raw event rows (someone navigating back and forward through a step shouldn't
+  // inflate its count) — done in application code rather than a SQL COUNT(DISTINCT ...) since
+  // Prisma's groupBy doesn't expose that directly, and this table is small enough (a handful of
+  // rows per user) that it's a non-issue.
+  fastify.get('/onboarding-funnel', { preHandler: [authenticateAdmin, requirePermission('analytics')] }, async (request, reply) => {
+    try {
+      const events = await prisma.onboardingEvent.findMany({ select: { userId: true, step: true } });
+
+      const usersByStep = new Map<string, Set<string>>();
+      for (const event of events) {
+        if (!usersByStep.has(event.step)) usersByStep.set(event.step, new Set());
+        usersByStep.get(event.step)!.add(event.userId);
+      }
+
+      const funnel = ONBOARDING_STEP_ORDER.map((step) => ({
+        step,
+        userCount: usersByStep.get(step)?.size ?? 0,
+      }));
+
+      return reply.send({ funnel });
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: 'Failed to compute onboarding funnel' });
+    }
+  });
 }

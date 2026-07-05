@@ -339,6 +339,24 @@ class APIService {
         )
     }
 
+    /// Self-hosted onboarding funnel — see OnboardingEvent's own comment in schema.prisma for
+    /// why this isn't a third-party analytics SDK. Deliberately fire-and-forget: callers should
+    /// never block the onboarding flow itself on this, and a dropped event just slightly
+    /// undercounts a step in the admin funnel view, not something a real user would ever notice.
+    func logOnboardingStep(_ step: String) async {
+        struct Body: Codable { let step: String }
+        struct Response: Codable { let recorded: Bool }
+        do {
+            let _: Response = try await request(
+                endpoint: "/profile/onboarding-event",
+                method: "POST",
+                body: Body(step: step)
+            )
+        } catch {
+            // Fire-and-forget, see the doc comment above — nothing to surface here.
+        }
+    }
+
     /// No auth — a crash can happen while logged out, or before a session even exists, and the
     /// whole point of this endpoint is to still capture that. See CrashReporter.swift.
     func reportDiagnostic(_ report: DiagnosticReport) async throws {
