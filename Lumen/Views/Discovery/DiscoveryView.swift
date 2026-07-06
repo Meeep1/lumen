@@ -241,6 +241,11 @@ struct DiscoveryView: View {
                 withAnimation {
                     matchedProfile = profile
                 }
+                // Same mechanism ChatView uses to hide the custom tab bar (see TabBarVisibility) —
+                // without this, the celebration overlay's own .ignoresSafeArea() only reached up to
+                // wherever the tab bar's reserved safeAreaInset space began, leaving it visible
+                // (and tappable) at the bottom of an otherwise full-screen moment.
+                TabBarVisibility.shared.isHidden = true
                 // First natural moment there's actually something worth notifying about —
                 // see PushNotificationManager for why this isn't requested at launch instead.
                 PushNotificationManager.shared.requestPermissionIfNeeded()
@@ -287,7 +292,7 @@ struct DiscoveryView: View {
                 endRadius: 320
             )
             .ignoresSafeArea()
-            .onTapGesture { withAnimation { matchedProfile = nil } }
+            .onTapGesture { dismissMatchCelebration() }
 
             VStack(spacing: 22) {
                 Text("It's a Match!")
@@ -340,6 +345,10 @@ struct DiscoveryView: View {
                             )
                             showingMatchChat = true
                         }
+                        // Deliberately not calling dismissMatchCelebration() here — that would
+                        // flip TabBarVisibility back to visible for a frame before ChatView's own
+                        // .onAppear (see TabBarVisibility) immediately hides it again. Leaving it
+                        // hidden through the transition avoids that flash.
                         withAnimation { matchedProfile = nil }
                     } label: {
                         Label("Send a Message", systemImage: "paperplane.fill")
@@ -349,7 +358,7 @@ struct DiscoveryView: View {
                     .disabled(matchedMatchId == nil)
 
                     Button {
-                        withAnimation { matchedProfile = nil }
+                        dismissMatchCelebration()
                     } label: {
                         Text("Keep Swiping")
                             .foregroundColor(.white.opacity(0.85))
@@ -376,6 +385,11 @@ struct DiscoveryView: View {
                 matchRingPulse = true
             }
         }
+    }
+
+    private func dismissMatchCelebration() {
+        withAnimation { matchedProfile = nil }
+        TabBarVisibility.shared.isHidden = false
     }
 }
 
