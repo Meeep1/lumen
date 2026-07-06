@@ -17,6 +17,7 @@ struct ChatView: View {
     @State private var imagePickerItem: PhotosPickerItem?
     @State private var isSendingImage = false
     @State private var imageSendErrorMessage: String?
+    @State private var fullscreenImageURL: URL?
 
     /// The most recent message the *current* user sent — the only one a "Read" receipt ever
     /// renders under, matching common chat UX (no per-message read marks, just the latest one).
@@ -72,7 +73,8 @@ struct ChatView: View {
                             MessageBubble(
                                 message: message,
                                 isFromCurrentUser: message.senderId == authManager.currentUser?.id,
-                                showReadReceipt: message.id == lastOwnMessage?.id && message.readAt != nil
+                                showReadReceipt: message.id == lastOwnMessage?.id && message.readAt != nil,
+                                onTapImage: { url in fullscreenImageURL = url }
                             )
                             .id(message.id)
                             .transition(.asymmetric(
@@ -192,6 +194,14 @@ struct ChatView: View {
             MatchProfileView(userId: match.userId, onUnmatch: {
                 Task { await unmatch() }
             })
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { fullscreenImageURL != nil },
+            set: { if !$0 { fullscreenImageURL = nil } }
+        )) {
+            if let fullscreenImageURL {
+                FullscreenImageView(url: fullscreenImageURL)
+            }
         }
         .sheet(isPresented: $showingReportSheet) {
             ReportUserSheet(reportedId: match.userId)
@@ -328,6 +338,7 @@ struct MessageBubble: View {
     let message: Message
     let isFromCurrentUser: Bool
     var showReadReceipt: Bool = false
+    var onTapImage: (URL) -> Void = { _ in }
 
     var body: some View {
         HStack {
@@ -363,6 +374,7 @@ struct MessageBubble: View {
                             }
                         }
                         .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .onTapGesture { onTapImage(imageUrl) }
                 }
 
                 Text(message.createdAt, style: .time)
@@ -405,6 +417,69 @@ struct TypingIndicatorBubble: View {
                 .background(Color.lumenSurfaceStrong)
                 .cornerRadius(16)
 
+                Spacer()
+            }
+        }
+    }
+}
+
+/// Tapping a sent/received photo in chat opens this instead of just leaving it at its small
+/// in-bubble size — pinch-to-zoom plus tap-or-drag-to-dismiss, the same gestures Photos.app and
+/// every other full-screen image viewer already trains people to expect.
+struct FullscreenImageView: View {
+    let url: URL
+    @Environment(\.dismiss) private var dismiss
+    @State private var zoom: CGFloat = 1
+    @State private var dragOffset: CGSize = .zero
+
+    var body: some View {
+        ZStack {
+            Color.black
+                .opacity(1 - min(abs(dragOffset.height) / 400, 0.6))
+                .ignoresSafeArea()
+
+            AsyncImage(url: url) { image in
+                image
+                    .resizable()
+                    .scaledToFit()
+                    .scaleEffect(zoom)
+                    .offset(dragOffset)
+            } placeholder: {
+                ProgressView().tint(.white)
+            }
+            .gesture(
+                MagnifyGesture()
+                    .onChanged { value in zoom = max(1, value.magnification) }
+                    .onEnded { _ in withAnimation { zoom = 1 } }
+            )
+            .simultaneousGesture(
+                DragGesture()
+                    .onChanged { value in
+                        guard zoom == 1 else { return }
+                        dragOffset = value.translation
+                    }
+                    .onEnded { value in
+                        if abs(value.translation.height) > 120 {
+                            dismiss()
+                        } else {
+                            withAnimation { dragOffset = .zero }
+                        }
+                    }
+            )
+            .onTapGesture { dismiss() }
+
+            VStack {
+                HStack {
+                    Spacer()
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title2)
+                            .foregroundStyle(.white, .black.opacity(0.4))
+                    }
+                    .padding()
+                }
                 Spacer()
             }
         }
