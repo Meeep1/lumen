@@ -5,39 +5,53 @@ import { authenticate } from '../middleware/auth';
 import { authenticateAdmin, requirePermission } from '../middleware/adminAuth';
 import { uploadPhoto, getPresignedUrl } from '../utils/storage';
 
-// Excludes visually-ambiguous characters (0/O, 1/I/L) since a reviewer has to read this back off
-// a photo of it held up to a camera, not copy-paste it.
-const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-const CODE_LENGTH = 6;
-const CODE_TTL_MS = 10 * 60 * 1000;
+// A "hold up this code" requirement (this file's previous version) tested badly — it doesn't
+// match what any other dating app's verification flow looks like, so it read as an odd,
+// unexplained hoop rather than a normal selfie check. A pose prompt gets the same anti-replay
+// property (the app fetches a random one moments before the camera opens, so a photo prepared or
+// downloaded in advance can't have anticipated it) via an ordinary gesture instead of an
+// alphanumeric string — closer to the liveness prompts (blink, turn your head, smile) that
+// Tinder/Bumble-style verification actually uses.
+const POSES = [
+  { id: 'peace-sign', label: 'Peace sign ✌️ next to your face' },
+  { id: 'thumbs-up', label: 'Thumbs up 👍 next to your face' },
+  { id: 'hand-on-chin', label: 'One hand resting on your chin 🤔' },
+  { id: 'frame-face', label: 'Both hands framing your face 🙌' },
+  { id: 'cover-one-eye', label: 'One hand covering one eye 🙈' },
+  { id: 'wave', label: 'A wave 👋 at the camera' },
+  { id: 'point-up', label: 'Pointing up next to your face ☝️' },
+] as const;
 
-function generateVerificationCode(): string {
-  let code = '';
-  for (let i = 0; i < CODE_LENGTH; i++) {
-    code += CODE_ALPHABET[randomInt(CODE_ALPHABET.length)];
-  }
-  return code;
+const POSE_TTL_MS = 10 * 60 * 1000;
+
+function pickRandomPose(): (typeof POSES)[number] {
+  return POSES[randomInt(POSES.length)];
+}
+
+function findPoseLabel(poseId: string | null): string | null {
+  return POSES.find((p) => p.id === poseId)?.label ?? null;
 }
 
 export default async function verificationRoutes(fastify: FastifyInstance) {
-  // Issue a fresh code the app displays right before opening the camera and requires the user
-  // to hold up in-frame — see the schema comment on User.verificationCode for why this exists.
-  // Called again (overwriting the old code) if the user backs out and restarts, so a stale code
-  // from an abandoned attempt is never still valid.
-  fastify.get('/code', { preHandler: authenticate }, async (request, reply) => {
+  // Issue a fresh pose prompt the app displays right before opening the camera and requires the
+  // user to actually do in-frame — see this file's top comment for why a pose replaced a code,
+  // and the schema comment on User.verificationPose for why the anti-replay mechanics stayed the
+  // same underneath. Called again (overwriting the old one) if the user backs out and restarts,
+  // so a stale prompt from an abandoned attempt is never still valid.
+  fastify.get('/pose', { preHandler: authenticate }, async (request, reply) => {
     try {
-      const code = generateVerificationCode();
-      const expiresAt = new Date(Date.now() + CODE_TTL_MS);
+      const pose = pickRandomPose();
+      const expiresAt = new Date(Date.now() + POSE_TTL_MS);
 
       await prisma.user.update({
         where: { id: request.userId },
-        data: { verificationCode: code, verificationCodeExpiresAt: expiresAt },
+        data: { verificationPose: pose.id, verificationPoseExpiresAt: expiresAt },
       });
 
-      return reply.send({ code, expiresAt });
+      return reply.send({ poseId: pose.id, poseLabel: pose.label, expiresAt });
     } catch (error) {
       fastify.log.error(error);
-      return reply.status(500).send({ error: 'Failed to generate verification code' });
+      return reply.status(500).send({ error: 'Failed to generate verification pose' });
     }
   });
 
@@ -53,22 +67,22 @@ export default async function verificationRoutes(fastify: FastifyInstance) {
       // Sent as a form field ahead of the file part in the multipart body (see APIService's
       // submitVerificationPhoto) — @fastify/multipart only exposes fields that arrived before
       // the file it's currently parsing, hence the field-ordering requirement on the client.
-      const submittedCode = (data.fields.code as { value?: unknown } | undefined)?.value;
+      const submittedPoseId = (data.fields.pose as { value?: unknown } | undefined)?.value;
 
       const user = await prisma.user.findUnique({
         where: { id: request.userId },
-        select: { verificationCode: true, verificationCodeExpiresAt: true },
+        select: { verificationPose: true, verificationPoseExpiresAt: true },
       });
 
       if (
-        typeof submittedCode !== 'string' ||
-        !user?.verificationCode ||
-        submittedCode !== user.verificationCode ||
-        !user.verificationCodeExpiresAt ||
-        user.verificationCodeExpiresAt < new Date()
+        typeof submittedPoseId !== 'string' ||
+        !user?.verificationPose ||
+        submittedPoseId !== user.verificationPose ||
+        !user.verificationPoseExpiresAt ||
+        user.verificationPoseExpiresAt < new Date()
       ) {
         return reply.status(400).send({
-          error: 'Your verification code expired. Get a new code and retake the selfie.',
+          error: 'Your verification pose expired. Get a new one and retake the selfie.',
         });
       }
 
@@ -140,7 +154,7 @@ export default async function verificationRoutes(fastify: FastifyInstance) {
           email: true,
           verificationStatus: true,
           verificationPhotoUrl: true,
-          verificationCode: true,
+          verificationPose: true,
           photos: {
             where: { moderationStatus: 'approved' },
             orderBy: { order: 'asc' },
@@ -155,10 +169,10 @@ export default async function verificationRoutes(fastify: FastifyInstance) {
           email: u.email,
           status: u.verificationStatus,
           selfieUrl: u.verificationPhotoUrl ? await getPresignedUrl(u.verificationPhotoUrl) : null,
-          // The code the user was required to hold up on-camera for this submission — reviewers
-          // should reject anything where it isn't legibly visible in the selfie, since that's the
-          // whole point (see schema.prisma's User.verificationCode comment).
-          expectedCode: u.verificationCode,
+          // The pose the user was required to actually do for this submission — reviewers should
+          // reject anything where the selfie doesn't show it, since that's the whole point (see
+          // schema.prisma's User.verificationPose comment).
+          expectedPose: findPoseLabel(u.verificationPose),
           profilePhotoUrls: await Promise.all(u.photos.map((p) => getPresignedUrl(p.url))),
         }))
       );

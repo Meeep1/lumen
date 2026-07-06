@@ -2,18 +2,20 @@ import SwiftUI
 import UIKit
 
 /// Selfie verification. The selfie must come straight from the camera (no photo library access
-/// here at all) and has to visibly include a short code fetched moments beforehand — see
-/// APIService.getVerificationCode / verification.ts's GET /code. Neither check is real liveness
+/// here at all) and has to actually show a pose prompt fetched moments beforehand — see
+/// APIService.getVerificationPose / verification.ts's GET /pose. Neither check is real liveness
 /// detection, but together they rule out the trivially fakeable case this used to have: picking
 /// any existing photo (of yourself, or of someone else entirely) straight from the camera roll.
-/// An admin still does the actual comparison against your profile photos (app_spec.md Section
-/// 3.6's "manual queue" option), reviewable from the admin site's Verification tab.
+/// A pose (not a code to hold up) deliberately mirrors the kind of liveness prompt other dating
+/// apps' verification flows actually use. An admin still does the real comparison against your
+/// profile photos (app_spec.md Section 3.6's "manual queue" option), reviewable from the admin
+/// site's Verification tab.
 struct VerificationView: View {
     @State private var status: VerificationStatusResponse?
     @State private var isLoading = true
-    @State private var codeResponse: VerificationCodeResponse?
-    @State private var isFetchingCode = false
-    @State private var codeFetchError: String?
+    @State private var poseResponse: VerificationPoseResponse?
+    @State private var isFetchingPose = false
+    @State private var poseFetchError: String?
     @State private var showingCamera = false
     @State private var capturedImage: UIImage?
     @State private var isSubmitting = false
@@ -65,9 +67,9 @@ struct VerificationView: View {
             message: submitError ?? ""
         )
         .customAlert(
-            isPresented: Binding(get: { codeFetchError != nil }, set: { if !$0 { codeFetchError = nil } }),
-            title: "Couldn't Get Code",
-            message: codeFetchError ?? ""
+            isPresented: Binding(get: { poseFetchError != nil }, set: { if !$0 { poseFetchError = nil } }),
+            title: "Couldn't Get Pose",
+            message: poseFetchError ?? ""
         )
     }
 
@@ -132,19 +134,19 @@ struct VerificationView: View {
             }
             .padding(.horizontal)
 
-            if let codeResponse {
-                codeBanner(codeResponse)
+            if let poseResponse {
+                poseBanner(poseResponse)
             }
 
             Button {
                 Task { await startCapture() }
             } label: {
-                if isFetchingCode {
+                if isFetchingPose {
                     ProgressView()
                         .frame(maxWidth: .infinity)
                         .frame(height: 48)
                 } else {
-                    Label(capturedImage == nil ? "Get My Code & Take Selfie" : "Retake Selfie", systemImage: "camera.fill")
+                    Label(capturedImage == nil ? "Get My Pose & Take Selfie" : "Retake Selfie", systemImage: "camera.fill")
                         .font(.subheadline.weight(.semibold))
                         .frame(maxWidth: .infinity)
                         .frame(height: 48)
@@ -154,7 +156,7 @@ struct VerificationView: View {
             .foregroundColor(.pink)
             .cornerRadius(14)
             .buttonStyle(LumenPressableStyle())
-            .disabled(isFetchingCode)
+            .disabled(isFetchingPose)
             .padding(.horizontal)
 
             Button {
@@ -166,11 +168,11 @@ struct VerificationView: View {
                     Text(status.status == "rejected" ? "Resubmit" : "Submit for Review")
                 }
             }
-            .buttonStyle(LumenPrimaryButtonStyle(isEnabled: capturedImage != nil && codeResponse != nil))
-            .disabled(capturedImage == nil || codeResponse == nil || isSubmitting)
+            .buttonStyle(LumenPrimaryButtonStyle(isEnabled: capturedImage != nil && poseResponse != nil))
+            .disabled(capturedImage == nil || poseResponse == nil || isSubmitting)
             .padding(.horizontal)
 
-            Text("Your code has to be visibly held up in a live selfie, not a photo from your library, before a real person compares it to your profile photos. Usually reviewed within a day.")
+            Text("Your selfie has to actually show the pose above, taken live rather than picked from your library, before a real person compares it to your profile photos. Usually reviewed within a day.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -178,22 +180,22 @@ struct VerificationView: View {
         }
     }
 
-    private func codeBanner(_ codeResponse: VerificationCodeResponse) -> some View {
+    private func poseBanner(_ poseResponse: VerificationPoseResponse) -> some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
-            codeBannerContent(remaining: Int(codeResponse.expiresAt.timeIntervalSince(context.date)), code: codeResponse.code)
+            poseBannerContent(remaining: Int(poseResponse.expiresAt.timeIntervalSince(context.date)), label: poseResponse.poseLabel)
         }
     }
 
     @ViewBuilder
-    private func codeBannerContent(remaining: Int, code: String) -> some View {
+    private func poseBannerContent(remaining: Int, label: String) -> some View {
         VStack(spacing: 6) {
-            Text("Hold up this code in your selfie")
+            Text("Strike this pose in your selfie")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Text(code)
-                .font(.system(.title2, design: .monospaced).weight(.bold))
-                .kerning(3)
-            Text(remaining > 0 ? "Expires in \(remaining / 60):\(String(format: "%02d", remaining % 60))" : "Expired, get a new code")
+            Text(label)
+                .font(.title3.weight(.bold))
+                .multilineTextAlignment(.center)
+            Text(remaining > 0 ? "Expires in \(remaining / 60):\(String(format: "%02d", remaining % 60))" : "Expired, get a new pose")
                 .font(.caption2)
                 .foregroundStyle(remaining > 0 ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.red))
         }
@@ -249,39 +251,39 @@ struct VerificationView: View {
         }
     }
 
-    /// Fetches a fresh code first, then opens the camera — in that order, so the code is always
+    /// Fetches a fresh pose first, then opens the camera — in that order, so the pose is always
     /// generated moments before the photo it's meant to appear in, not reused from an earlier,
     /// possibly-stale attempt.
     private func startCapture() async {
-        isFetchingCode = true
-        defer { isFetchingCode = false }
+        isFetchingPose = true
+        defer { isFetchingPose = false }
 
         do {
-            codeResponse = try await APIService.shared.getVerificationCode()
+            poseResponse = try await APIService.shared.getVerificationPose()
             capturedImage = nil
 
             guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
-                codeFetchError = "Camera not available on this device."
+                poseFetchError = "Camera not available on this device."
                 return
             }
             showingCamera = true
         } catch {
-            codeFetchError = error.localizedDescription
+            poseFetchError = error.localizedDescription
         }
     }
 
     private func submit() async {
         guard let capturedImage,
-              let codeResponse,
+              let poseResponse,
               let jpegData = capturedImage.jpegData(compressionQuality: 0.85) else { return }
 
         isSubmitting = true
         defer { isSubmitting = false }
 
         do {
-            try await APIService.shared.submitVerificationPhoto(imageData: jpegData, code: codeResponse.code)
+            try await APIService.shared.submitVerificationPhoto(imageData: jpegData, poseId: poseResponse.poseId)
             self.capturedImage = nil
-            self.codeResponse = nil
+            self.poseResponse = nil
             await load()
         } catch {
             submitError = error.localizedDescription

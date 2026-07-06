@@ -105,10 +105,11 @@ struct VerificationStatusResponse: Codable {
     let reviewedAt: Date?
 }
 
-/// A short-lived code the user must hold up in their own verification selfie — see
-/// verification.ts's GET /code for why this exists (cheap anti-replay for a manual review queue).
-struct VerificationCodeResponse: Codable {
-    let code: String
+/// A short-lived pose prompt the user must actually do in their own verification selfie — see
+/// verification.ts's GET /pose for why this exists (cheap anti-replay for a manual review queue).
+struct VerificationPoseResponse: Codable {
+    let poseId: String
+    let poseLabel: String
     let expiresAt: Date
 }
 
