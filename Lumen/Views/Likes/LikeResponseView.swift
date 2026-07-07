@@ -90,37 +90,44 @@ struct LikeResponseView: View {
             }
             }
             .toolbar(.hidden, for: .navigationBar)
-            .overlay {
-                if matched {
-                    MatchCelebrationView(
-                        photoURL: APIService.shared.imageURL(for: like.primaryPhoto),
-                        genderIdentity: like.genderIdentity,
-                        onSendMessage: {
-                            if let matchedMatchId {
-                                chatMatch = Match(
-                                    matchId: matchedMatchId,
-                                    userId: like.id,
-                                    age: like.age,
-                                    genderIdentity: like.genderIdentity,
-                                    cityDisplay: like.cityDisplay,
-                                    isVerified: like.isVerified,
-                                    photo: like.primaryPhoto,
-                                    isOnline: nil,
-                                    lastActiveAt: nil,
-                                    lastMessage: nil,
-                                    matchedAt: Date()
-                                )
-                                matched = false
-                                showingMatchChat = true
-                            } else {
-                                dismiss()
-                            }
-                        },
-                        onDismiss: {
+            // A plain `.overlay` here previously — but this whole view is itself presented as a
+            // card-style `.sheet` from LikesYouView, which is inset from the true screen bounds
+            // (a margin at the top, rounded/inset corners at the bottom). An overlay only fills
+            // whatever container it's placed in, so `MatchCelebrationView`'s own
+            // `.ignoresSafeArea()` was filling the *sheet's* bounds, not the actual screen —
+            // exactly the gaps reported at the top and bottom corners. `.fullScreenCover` is a
+            // real, separate full-screen modal, the same fix DiscoveryView's own celebration
+            // needed for the same reason (see its own comment).
+            .fullScreenCover(isPresented: $matched) {
+                MatchCelebrationView(
+                    photoURL: APIService.shared.imageURL(for: like.primaryPhoto),
+                    genderIdentity: like.genderIdentity,
+                    dismissLabel: "Not Now",
+                    onSendMessage: {
+                        if let matchedMatchId {
+                            chatMatch = Match(
+                                matchId: matchedMatchId,
+                                userId: like.id,
+                                age: like.age,
+                                genderIdentity: like.genderIdentity,
+                                cityDisplay: like.cityDisplay,
+                                isVerified: like.isVerified,
+                                photo: like.primaryPhoto,
+                                isOnline: nil,
+                                lastActiveAt: nil,
+                                lastMessage: nil,
+                                matchedAt: Date()
+                            )
+                            matched = false
+                            showingMatchChat = true
+                        } else {
                             dismiss()
                         }
-                    )
-                }
+                    },
+                    onDismiss: {
+                        dismiss()
+                    }
+                )
             }
             .navigationDestination(isPresented: $showingMatchChat) {
                 if let chatMatch {

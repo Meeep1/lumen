@@ -79,6 +79,16 @@ export const PROMPT_QUESTIONS = [
   "I'm weirdly competitive about...",
   'Two truths and a lie...',
   'My love language is...',
+  'I go on and on about...',
+  "The key to my heart is...",
+  'My most controversial opinion is...',
+  "I'm looking for...",
+  'A perfect first date is...',
+  'My friends would describe me as...',
+  "I'll fall for you if...",
+  "Together, we could...",
+  'My simple pleasures are...',
+  "Let's debate this topic...",
 ] as const;
 
 export const updateProfileSchema = z.object({

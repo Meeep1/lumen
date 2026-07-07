@@ -11,6 +11,8 @@ export default async function accountRoutes(fastify: FastifyInstance) {
   // of those rows, so they're deleted here explicitly. Without this, a "deleted" account's photos
   // stayed servable forever at their old /uploads/ URL (no ownership check on that static route),
   // which defeats the point of a privacy-motivated deletion feature.
+  // Feedback is the one deliberate exception — its userId gets nulled out (onDelete: SetNull),
+  // not deleted, since it's meant to outlive the account that sent it.
   fastify.delete('/account', { preHandler: authenticate }, async (request, reply) => {
     try {
       await prisma.user.delete({ where: { id: request.userId } });

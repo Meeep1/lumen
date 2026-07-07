@@ -101,18 +101,24 @@ struct OnboardingView: View {
 /// Optional — the previous step only requires one photo, so this offers a chance to round out
 /// the profile with more (up to the same 6-photo cap as Manage Photos) before ever reaching
 /// Discovery, rather than only being discoverable from Settings afterward.
+///
+/// Deliberately shows every uploaded photo with no moderation-status badge (unlike Manage
+/// Photos' "Under review"/"Not approved" treatment) — moderation still runs the same as any
+/// other upload (see queue.ts), this just doesn't surface that mid-onboarding, where it would
+/// read as an interruption rather than useful status.
 private struct MorePhotosStepView: View {
     @EnvironmentObject var authManager: AuthenticationManager
     let onContinue: () -> Void
     let onSkip: () -> Void
 
-    @State private var photoCount = 1
+    @State private var photos: [Photo] = []
     @State private var pickerItem: PhotosPickerItem?
     @State private var imageToCrop: UIImage?
     @State private var isUploading = false
     @State private var errorMessage: String?
 
     private let maxPhotos = 6
+    private let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
 
     var body: some View {
         VStack(spacing: 24) {
@@ -126,21 +132,43 @@ private struct MorePhotosStepView: View {
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 32)
 
-            if photoCount < maxPhotos {
-                PhotosPicker(selection: $pickerItem, matching: .images) {
-                    if isUploading {
-                        ProgressView()
-                    } else {
-                        Label("Add Photo", systemImage: "plus.circle.fill")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundColor(.pink)
-                    }
+            LazyVGrid(columns: columns, spacing: 10) {
+                ForEach(photos) { photo in
+                    Color.clear
+                        .aspectRatio(1, contentMode: .fit)
+                        .overlay {
+                            AsyncImage(url: APIService.shared.imageURL(for: photo.thumbnailUrl ?? photo.url)) { image in
+                                image.resizable().scaledToFill()
+                            } placeholder: {
+                                Rectangle().fill(Color.lumenSurfaceStrong)
+                            }
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
-                .buttonStyle(LumenPressableStyle())
-                .disabled(isUploading)
-            }
 
-            Text("\(photoCount) of \(maxPhotos) photos")
+                if photos.count < maxPhotos {
+                    PhotosPicker(selection: $pickerItem, matching: .images) {
+                        Color.clear
+                            .aspectRatio(1, contentMode: .fit)
+                            .overlay {
+                                if isUploading {
+                                    ProgressView()
+                                } else {
+                                    Image(systemName: "plus.circle.fill")
+                                        .font(.title2)
+                                        .foregroundColor(.pink)
+                                }
+                            }
+                            .background(Color.lumenSurface)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                    .buttonStyle(LumenPressableStyle())
+                    .disabled(isUploading)
+                }
+            }
+            .padding(.horizontal, 32)
+
+            Text("\(photos.count) of \(maxPhotos) photos")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -168,9 +196,9 @@ private struct MorePhotosStepView: View {
         }
         .task {
             // The photo from the previous (required) step was uploaded directly via APIService,
-            // not through authManager, so currentUser's photo count is stale until refreshed here.
+            // not through authManager, so currentUser's photos are stale until refreshed here.
             await authManager.loadCurrentUser()
-            photoCount = authManager.currentUser?.photos.count ?? 1
+            photos = authManager.currentUser?.photos ?? []
         }
         .onChange(of: pickerItem) { _, newItem in
             Task { await load(newItem) }
@@ -209,8 +237,8 @@ private struct MorePhotosStepView: View {
         defer { isUploading = false }
 
         do {
-            _ = try await APIService.shared.uploadPhoto(imageData: jpegData)
-            photoCount += 1
+            let uploaded = try await APIService.shared.uploadPhoto(imageData: jpegData)
+            photos.append(uploaded)
         } catch {
             errorMessage = error.localizedDescription
         }

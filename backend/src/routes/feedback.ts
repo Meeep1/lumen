@@ -41,7 +41,7 @@ export default async function feedbackRoutes(fastify: FastifyInstance) {
         feedback: feedback.map((f) => ({
           id: f.id,
           userId: f.userId,
-          email: f.user.email,
+          email: f.user?.email ?? null,
           message: f.message,
           createdAt: f.createdAt,
         })),

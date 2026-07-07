@@ -65,6 +65,16 @@ enum PromptQuestion: String, CaseIterable {
     case competitive = "I'm weirdly competitive about..."
     case twoTruths = "Two truths and a lie..."
     case loveLanguage = "My love language is..."
+    case goOnAndOn = "I go on and on about..."
+    case keyToMyHeart = "The key to my heart is..."
+    case controversialOpinion = "My most controversial opinion is..."
+    case lookingFor = "I'm looking for..."
+    case perfectFirstDate = "A perfect first date is..."
+    case friendsDescribe = "My friends would describe me as..."
+    case fallForYou = "I'll fall for you if..."
+    case together = "Together, we could..."
+    case simplePleasures = "My simple pleasures are..."
+    case debate = "Let's debate this topic..."
 }
 
 enum GenderIdentity: String, Codable, CaseIterable {

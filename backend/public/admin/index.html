@@ -1371,7 +1371,7 @@ function renderFeedback(data) {
 
   els.feedbackList.innerHTML = feedback.map((f) => `
     <div class="report">
-      <div class="who">${escapeHtml(f.email)}</div>
+      <div class="who">${escapeHtml(f.email || '[account deleted]')}</div>
       <div class="details">${escapeHtml(f.message)}</div>
       <div class="meta">${new Date(f.createdAt).toLocaleString()}</div>
     </div>

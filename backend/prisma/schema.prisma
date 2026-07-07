@@ -350,9 +350,13 @@ model OnboardingEvent {
 // admin panel's Feedback tab, not a support ticket system with a response loop.
 model Feedback {
   id        String   @id @default(uuid())
-  userId    String
+  // Nullable, with onDelete: SetNull rather than Cascade — feedback is meant to outlive the
+  // account that sent it (an admin reading it later shouldn't lose it just because the sender
+  // deleted their account since), unlike the rest of a deleted user's data (photos, matches,
+  // messages) which genuinely should disappear with them.
+  userId    String?
   message   String
   createdAt DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 }

@@ -331,6 +331,9 @@ struct DiscoveryView: View {
 struct MatchCelebrationView: View {
     let photoURL: URL?
     let genderIdentity: GenderIdentity
+    /// "Keep Swiping" makes sense from Discovery, but there's no swiping happening on the Likes
+    /// You path (you already responded to an incoming like) — callers there pass something else.
+    var dismissLabel: String = "Keep Swiping"
     let onSendMessage: () -> Void
     let onDismiss: () -> Void
 
@@ -396,7 +399,7 @@ struct MatchCelebrationView: View {
                     Button {
                         onDismiss()
                     } label: {
-                        Text("Keep Swiping")
+                        Text(dismissLabel)
                             .foregroundColor(.white.opacity(0.85))
                     }
                     .buttonStyle(LumenPressableStyle())

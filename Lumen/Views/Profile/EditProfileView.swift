@@ -40,15 +40,6 @@ struct EditProfileView: View {
 
                 ScrollView {
                     VStack(spacing: 20) {
-                        SettingsCard {
-                            NavigationLink {
-                                ManagePhotosView()
-                            } label: {
-                                SettingsRow(icon: "photo.on.rectangle.angled", title: "Manage Photos")
-                            }
-                            .buttonStyle(.plain)
-                        }
-
                         SettingsSection(title: "Gender Identity") {
                             SettingsCard {
                                 VStack(alignment: .leading, spacing: 8) {
