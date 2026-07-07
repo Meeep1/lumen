@@ -216,6 +216,15 @@ export function preloadModerationModel(): ReturnType<typeof nsfwjs.load> {
 ///     exactly the failure case above: whatever score Hentai gets, an actually-explicit
 ///     illustration still lands in pending (a human decides), it just can never again be
 ///     auto-deleted with no one looking at it first.
+///   - Pass 7: a confirmed-normal drawing (real, non-explicit art) scored Hentai 73% / Drawing
+///     25% — still cleared pass 6's drawingPendingThreshold (0.35) by a wide margin, landing in
+///     the review queue for no real reason. Per explicit product direction, raised
+///     drawingPendingThreshold 0.35 -> 0.75 (matching rejectThreshold) so ordinary stylized art
+///     in this score range auto-approves instead of waiting on a human. Accepted tradeoff: a
+///     genuinely explicit illustration scoring in that same ~70-75% range would now also auto-
+///     approve rather than land in pending — `looksLikeDrawing` still guarantees it can never be
+///     auto-*rejected* outright, but "pending" itself is no longer guaranteed at this range the
+///     way it was before this pass.
 /// Still only a handful of confirmed real data points — treat this as a working hypothesis that
 /// improves as the admin Photos queue collects more, not a solved problem.
 /// Sexy raised from 0.5 to 0.8 (product decision: suggestive-but-not-explicit content, swimwear,
@@ -274,7 +283,7 @@ export async function moderateImage(imageBytes: Buffer): Promise<{
   const drawingLeewayThreshold = parseFloat(process.env.MODERATION_DRAWING_LEEWAY_SCORE || '0.15');
   // Only applies once looksLikeDrawing is true (see below) — real photos still use the much
   // more aggressive pendingThreshold above unchanged.
-  const drawingPendingThreshold = parseFloat(process.env.MODERATION_DRAWING_PENDING_SCORE || '0.35');
+  const drawingPendingThreshold = parseFloat(process.env.MODERATION_DRAWING_PENDING_SCORE || '0.75');
 
   const labels = predictions
     .filter((p) => p.probability >= 0.05)
