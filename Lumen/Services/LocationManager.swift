@@ -21,6 +21,12 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         authorizationStatus = CLLocationManager().authorizationStatus
         super.init()
         manager.delegate = self
+        // Default accuracy (`kCLLocationAccuracyBest`) makes CoreLocation wait for the tightest
+        // possible GPS fix before returning — often several extra seconds, worse cold/indoors —
+        // for precision this app throws away immediately anyway (only ever reverse-geocoded down
+        // to a city name, never shown or stored more precisely). Requesting a coarser fix up front
+        // resolves noticeably faster and still comfortably narrows down to the right city.
+        manager.desiredAccuracy = kCLLocationAccuracyKilometer
     }
 
     func requestLocation() {
