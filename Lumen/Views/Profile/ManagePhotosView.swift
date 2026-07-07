@@ -77,7 +77,7 @@ struct ManagePhotosView: View {
             Color.clear
                 .frame(width: 56, height: 56)
                 .overlay {
-                    AsyncImage(url: APIService.shared.imageURL(for: photo.url)) { image in
+                    AsyncImage(url: APIService.shared.imageURL(for: photo.thumbnailUrl ?? photo.url)) { image in
                         image.resizable().scaledToFill()
                     } placeholder: {
                         Rectangle().fill(Color.lumenSurfaceStrong)

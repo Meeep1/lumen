@@ -86,6 +86,11 @@ enum GenderIdentity: String, Codable, CaseIterable {
 struct Photo: Codable, Identifiable {
     let id: String
     let url: String
+    /// A small resized copy of `url`, meant for anywhere this photo shows up small (a list row,
+    /// a grid cell) instead of fetching the full original upload just to shrink it on-screen.
+    /// Absent from endpoints that don't return it (Discovery's stack, other users' profiles) —
+    /// callers there should keep using `url` directly, same as before this field existed.
+    let thumbnailUrl: String?
     let order: Int
     let moderationStatus: String?
     let appealStatus: String?

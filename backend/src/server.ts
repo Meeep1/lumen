@@ -101,10 +101,19 @@ async function registerPlugins() {
     },
   });
 
-  // Static file serving for uploaded photos (local dev mode)
+  // Static file serving for uploaded photos (local dev mode). Long-lived cache headers are safe
+  // here specifically because every uploaded file gets a fresh crypto.randomUUID() filename
+  // (see storage.ts's uploadPhoto) and is never overwritten in place — "changing" a photo always
+  // means a new upload at a new URL, so a client caching an old URL forever can never end up
+  // showing stale content, only a 404 once the old photo is actually deleted. Without this,
+  // every repeat view of the same photo (reopening Manage Photos, scrolling back to a profile)
+  // re-downloaded it from scratch.
   await fastify.register(fastifyStatic, {
     root: path.join(__dirname, '../uploads'),
     prefix: '/uploads/',
+    cacheControl: true,
+    maxAge: '30d',
+    immutable: true,
   });
 
   // Public marketing site (landing page, Privacy Policy, Terms of Service, Community

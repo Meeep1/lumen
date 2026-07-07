@@ -31,7 +31,7 @@ export async function uploadPhoto(
   buffer: Buffer,
   userId: string,
   isVerification: boolean = false
-): Promise<string> {
+): Promise<{ url: string; thumbnailUrl: string }> {
   // Create user-specific directory
   const userDir = path.join(UPLOADS_DIR, isVerification ? 'verification' : 'photos', userId);
   if (!fs.existsSync(userDir)) {
@@ -39,17 +39,28 @@ export async function uploadPhoto(
   }
 
   // Generate unique filename
-  const filename = `${crypto.randomUUID()}.jpg`;
+  const id = crypto.randomUUID();
+  const filename = `${id}.jpg`;
   const filepath = path.join(userDir, filename);
-  
+
   // Save file to disk
   fs.writeFileSync(filepath, buffer);
-  
-  // Return relative path (used as identifier)
-  const relativePath = `${isVerification ? 'verification' : 'photos'}/${userId}/${filename}`;
+
+  // A small resized copy alongside the original — see schema.prisma's Photo.thumbnailUrl
+  // comment for why this exists. Same stretch/crop-to-fill sizing regardless of the source
+  // photo's own aspect ratio, since every place this gets shown small is itself a fixed square
+  // box (a 56x56 list row, a 96x96 admin queue cell).
+  const thumbFilename = `${id}_thumb.jpg`;
+  const thumbBuffer = await sharp(buffer).resize(300, 300, { fit: 'cover' }).jpeg({ quality: 80 }).toBuffer();
+  fs.writeFileSync(path.join(userDir, thumbFilename), thumbBuffer);
+
+  // Return relative paths (used as identifiers)
+  const kind = isVerification ? 'verification' : 'photos';
+  const relativePath = `${kind}/${userId}/${filename}`;
+  const thumbRelativePath = `${kind}/${userId}/${thumbFilename}`;
   console.log(`📸 Photo saved: ${relativePath}`);
-  
-  return relativePath;
+
+  return { url: relativePath, thumbnailUrl: thumbRelativePath };
 }
 
 /// Chat images (see routes/match.ts's POST /:matchId/messages/photo), kept in their own

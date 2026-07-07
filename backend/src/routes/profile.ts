@@ -33,6 +33,9 @@ export default async function profileRoutes(fastify: FastifyInstance) {
         user.photos.map(async (photo) => ({
           id: photo.id,
           url: await getPresignedUrl(photo.url),
+          // Nullable — a photo uploaded before thumbnailUrl existed has none, so this falls
+          // back to the same full-size url rather than a broken link.
+          thumbnailUrl: photo.thumbnailUrl ? await getPresignedUrl(photo.thumbnailUrl) : await getPresignedUrl(photo.url),
           order: photo.order,
           moderationStatus: photo.moderationStatus,
           appealStatus: photo.appealStatus,
@@ -283,7 +286,7 @@ export default async function profileRoutes(fastify: FastifyInstance) {
       }
 
       // Upload to disk (or S3 in production)
-      const photoKey = await uploadPhoto(buffer, request.userId!);
+      const { url: photoKey, thumbnailUrl: thumbnailKey } = await uploadPhoto(buffer, request.userId!);
 
       // Save to database — moderationStatus defaults to 'pending' (see schema.prisma). The
       // actual NSFWJS classification happens off-request now (see queue.ts/worker.ts): it's
@@ -296,6 +299,7 @@ export default async function profileRoutes(fastify: FastifyInstance) {
         data: {
           userId: request.userId!,
           url: photoKey,
+          thumbnailUrl: thumbnailKey,
           order: photoCount,
         },
       });
@@ -305,6 +309,7 @@ export default async function profileRoutes(fastify: FastifyInstance) {
       return reply.status(201).send({
         id: photo.id,
         url: await getPresignedUrl(photoKey),
+        thumbnailUrl: await getPresignedUrl(thumbnailKey),
         order: photo.order,
         moderationStatus: photo.moderationStatus,
       });
@@ -333,6 +338,7 @@ export default async function profileRoutes(fastify: FastifyInstance) {
 
       // Delete from S3
       await deletePhoto(photo.url);
+      if (photo.thumbnailUrl) await deletePhoto(photo.thumbnailUrl);
 
       // Delete from database
       await prisma.photo.delete({

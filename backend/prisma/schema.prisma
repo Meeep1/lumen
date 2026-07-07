@@ -165,6 +165,12 @@ model Photo {
   id               String            @id @default(uuid())
   userId           String
   url              String
+  // A small resized copy generated alongside the original at upload time (see storage.ts's
+  // uploadPhoto()) — every place that shows this photo small (Manage Photos' list row, the
+  // admin queue) used to fetch the full original upload just to render a tiny box, the same
+  // wasted-bandwidth problem moderateImage() already had to fix for its own tensor-building.
+  // Nullable so photos uploaded before this existed just fall back to `url`.
+  thumbnailUrl     String?
   order            Int
   moderationStatus ModerationStatus  @default(pending)
   // Human-readable classifier output at the time of the last moderation check (e.g. "Porn

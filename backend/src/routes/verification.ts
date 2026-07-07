@@ -93,7 +93,10 @@ export default async function verificationRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({ error: 'File too large' });
       }
 
-      const photoKey = await uploadPhoto(buffer, request.userId!, true);
+      // Verification selfies aren't shown as a small grid thumbnail anywhere the way profile
+      // photos are (see storage.ts's uploadPhoto comment) — just the one photo, shown at real
+      // size — so the generated thumbnail isn't used here, only the full-size url.
+      const { url: photoKey } = await uploadPhoto(buffer, request.userId!, true);
 
       await prisma.user.update({
         where: { id: request.userId },
