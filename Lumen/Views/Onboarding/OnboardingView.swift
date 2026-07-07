@@ -8,7 +8,7 @@ struct OnboardingView: View {
     var onFinish: () -> Void = {}
 
     private enum Step: Int, CaseIterable {
-        case location, photo, about, height, details, prompts, tags
+        case location, photo, about, height, details, prompts, tags, notifications
     }
 
     @State private var step: Step = .location
@@ -48,7 +48,9 @@ struct OnboardingView: View {
                     case .prompts:
                         PromptsStepView(onContinue: { advance() }, onSkip: { advance() })
                     case .tags:
-                        TagsStepView(onFinish: { finish() }, onSkip: { finish() })
+                        TagsStepView(onFinish: { advance() }, onSkip: { advance() })
+                    case .notifications:
+                        NotificationsStepView(onFinish: { finish() }, onSkip: { finish() })
                     }
                 }
                 .frame(maxHeight: .infinity)
@@ -89,6 +91,56 @@ struct OnboardingView: View {
             await APIService.shared.logOnboardingStep("completed")
             await authManager.loadCurrentUser()
             onFinish()
+        }
+    }
+}
+
+/// Last onboarding step — asks for push permission here instead of waiting for a user's first
+/// match (the previous, more conventional "ask contextually" approach). Product decision: every
+/// permission the app ever needs should surface during onboarding, not be scattered across later
+/// moments. `PushNotificationManager.requestPermissionIfNeeded()` is safe to call again from
+/// DiscoveryView's first-match moment too (its own doc comment: only ever prompts once, silently
+/// returns the existing decision after) — that call is left in place as the path for accounts
+/// that onboarded before this step existed.
+private struct NotificationsStepView: View {
+    let onFinish: () -> Void
+    let onSkip: () -> Void
+
+    var body: some View {
+        VStack(spacing: 24) {
+            Spacer()
+
+            Image(systemName: "bell.badge.fill")
+                .resizable()
+                .frame(width: 80, height: 80)
+                .foregroundStyle(Theme.primaryGradient)
+
+            Text("Stay in the loop")
+                .font(.title.bold())
+
+            Text("Get notified about new matches, messages, and likes. You can turn any of these off later in Settings.")
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 32)
+
+            Spacer()
+
+            VStack(spacing: 12) {
+                Button {
+                    PushNotificationManager.shared.requestPermissionIfNeeded()
+                    onFinish()
+                } label: {
+                    Text("Enable Notifications")
+                }
+                .buttonStyle(LumenPrimaryButtonStyle())
+
+                Button("Skip", action: onSkip)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .buttonStyle(LumenPressableStyle())
+            }
+            .padding(.horizontal, 32)
+            .padding(.bottom, 32)
         }
     }
 }
