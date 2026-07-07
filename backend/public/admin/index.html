@@ -178,6 +178,14 @@
   /* --- Dashboard --- */
   .tabs { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
   .tabs button.active { background: var(--ink); color: white; border-color: var(--ink); }
+  .tabs input[type="text"] {
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font: inherit;
+    background: var(--card);
+    color: inherit;
+  }
 
   .report {
     background: var(--card);
@@ -565,9 +573,11 @@
         <button data-section="photos" data-permission="moderation"><span class="nav-icon">🖼️</span> Photos</button>
         <button data-section="appeals" data-permission="moderation"><span class="nav-icon">🔁</span> Appeals</button>
         <button data-section="thresholds" data-permission="moderation"><span class="nav-icon">📊</span> Thresholds</button>
+        <button data-section="users" data-permission="users"><span class="nav-icon">👤</span> Users</button>
         <button data-section="test-tools" data-permission="testTools"><span class="nav-icon">🧪</span> Test Tools</button>
         <button data-section="analytics" data-permission="analytics"><span class="nav-icon">📈</span> Analytics</button>
         <button data-section="team" data-permission="__superAdmin"><span class="nav-icon">👥</span> Team</button>
+        <button data-section="audit" data-permission="__superAdmin"><span class="nav-icon">🕵️</span> Audit Log</button>
       </div>
     </nav>
 
@@ -785,6 +795,28 @@
       </div>
       <div id="teamList"></div>
     </div>
+
+    <div id="usersSection" class="hidden">
+      <div class="tabs">
+        <input id="userSearchInput" type="text" placeholder="Search by email, phone, city, or id" style="flex:1;min-width:200px">
+        <button id="userSearchBtn" class="ghost">Search</button>
+        <button id="usersRefreshBtn" class="ghost">Refresh</button>
+      </div>
+      <div id="usersList"></div>
+      <div class="tabs" style="margin-top:12px">
+        <button id="usersPrevBtn" class="ghost">&larr; Prev</button>
+        <span id="usersPageInfo" style="font-size:13px;color:var(--muted)"></span>
+        <button id="usersNextBtn" class="ghost">Next &rarr;</button>
+      </div>
+    </div>
+
+    <div id="auditSection" class="hidden">
+      <div class="tabs">
+        <span style="font-size:13px;color:var(--muted)">Sensitive admin reads — who viewed a profile, a chat, or searched the user directory, and when. Most recent first.</span>
+        <button id="auditRefreshBtn" class="ghost" style="margin-left:auto">Refresh</button>
+      </div>
+      <div id="auditList"></div>
+    </div>
     </div>
   </section>
 </main>
@@ -844,6 +876,17 @@ const els = {
   teamList: document.getElementById('teamList'),
   addAdminBtn: document.getElementById('addAdminBtn'),
   teamRefreshBtn: document.getElementById('teamRefreshBtn'),
+  usersSection: document.getElementById('usersSection'),
+  usersList: document.getElementById('usersList'),
+  userSearchInput: document.getElementById('userSearchInput'),
+  userSearchBtn: document.getElementById('userSearchBtn'),
+  usersRefreshBtn: document.getElementById('usersRefreshBtn'),
+  usersPrevBtn: document.getElementById('usersPrevBtn'),
+  usersNextBtn: document.getElementById('usersNextBtn'),
+  usersPageInfo: document.getElementById('usersPageInfo'),
+  auditSection: document.getElementById('auditSection'),
+  auditList: document.getElementById('auditList'),
+  auditRefreshBtn: document.getElementById('auditRefreshBtn'),
 };
 
 let activeStatus = '';
@@ -851,6 +894,10 @@ let activeVerificationStatus = 'pending';
 let activePhotoStatus = 'pending';
 let activeAppealStatus = 'pending';
 let currentAdmin = null; // { id, email, isSuperAdmin, permissions }
+let usersPage = 1;
+let usersSearchQuery = '';
+let usersTotal = 0;
+const USERS_PAGE_SIZE = 50;
 
 function getToken() {
   return localStorage.getItem('lumen_admin_access');
@@ -975,6 +1022,8 @@ els.sectionNav.forEach((btn) => {
     els.testToolsSection.classList.toggle('hidden', section !== 'test-tools');
     els.analyticsSection.classList.toggle('hidden', section !== 'analytics');
     els.teamSection.classList.toggle('hidden', section !== 'team');
+    els.usersSection.classList.toggle('hidden', section !== 'users');
+    els.auditSection.classList.toggle('hidden', section !== 'audit');
     if (section === 'reports') loadReports();
     if (section === 'feedback') loadFeedback();
     if (section === 'verification') loadVerification();
@@ -983,6 +1032,8 @@ els.sectionNav.forEach((btn) => {
     if (section === 'test-tools') loadTestAccounts();
     if (section === 'analytics') loadOnboardingFunnel();
     if (section === 'team') loadTeam();
+    if (section === 'users') loadUsers();
+    if (section === 'audit') loadAuditLog();
   });
 });
 
@@ -1579,6 +1630,7 @@ const PERMISSION_LABELS = {
   moderation: 'Photos & Appeals',
   testTools: 'Test Tools',
   analytics: 'Analytics',
+  users: 'Users',
 };
 
 async function loadTeam() {
@@ -1726,6 +1778,95 @@ window.deleteAdmin = async function (id, email) {
     alert(err.message);
   }
 };
+
+els.usersRefreshBtn.addEventListener('click', () => { usersPage = 1; loadUsers(); });
+els.userSearchBtn.addEventListener('click', () => {
+  usersSearchQuery = els.userSearchInput.value.trim();
+  usersPage = 1;
+  loadUsers();
+});
+els.userSearchInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') els.userSearchBtn.click();
+});
+els.usersPrevBtn.addEventListener('click', () => {
+  if (usersPage > 1) { usersPage--; loadUsers(); }
+});
+els.usersNextBtn.addEventListener('click', () => {
+  if (usersPage * USERS_PAGE_SIZE < usersTotal) { usersPage++; loadUsers(); }
+});
+
+async function loadUsers() {
+  els.usersList.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const params = new URLSearchParams({ page: String(usersPage) });
+    if (usersSearchQuery) params.set('search', usersSearchQuery);
+    const res = await authedFetch(`/admin-tools/users?${params}`);
+    if (!res.ok) throw new Error('Failed to load users');
+    renderUsers(await res.json());
+  } catch (err) {
+    els.usersList.innerHTML = `<div class="empty">${err.message}</div>`;
+  }
+}
+
+function renderUsers(data) {
+  usersTotal = data.total || 0;
+  const users = data.users || [];
+
+  if (users.length === 0) {
+    els.usersList.innerHTML = '<div class="empty">No users found.</div>';
+  } else {
+    els.usersList.innerHTML = users.map((u) => `
+      <div class="report">
+        <div class="who">${escapeHtml(u.email)}</div>
+        <div class="details">
+          ${escapeHtml(u.phone || '—')} &middot; ${escapeHtml(u.cityDisplay || 'No location')}
+          ${u.isVerified ? ' &middot; Verified' : ''}
+          ${u.isSuspended ? ' &middot; Suspended' : ''}
+          ${!u.isActive ? ' &middot; Inactive' : ''}
+        </div>
+        <div class="meta">Joined ${new Date(u.createdAt).toLocaleDateString()} &middot; Last active ${new Date(u.lastActiveAt).toLocaleString()}</div>
+        <button class="ghost" onclick="openProfileModal('${u.id}')">View profile</button>
+      </div>
+    `).join('');
+  }
+
+  const from = usersTotal === 0 ? 0 : (usersPage - 1) * USERS_PAGE_SIZE + 1;
+  const to = Math.min(usersPage * USERS_PAGE_SIZE, usersTotal);
+  els.usersPageInfo.textContent = `${from}-${to} of ${usersTotal}`;
+  els.usersPrevBtn.disabled = usersPage <= 1;
+  els.usersNextBtn.disabled = usersPage * USERS_PAGE_SIZE >= usersTotal;
+}
+
+els.auditRefreshBtn.addEventListener('click', loadAuditLog);
+
+async function loadAuditLog() {
+  els.auditList.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const res = await authedFetch('/admin-tools/audit-log');
+    if (!res.ok) throw new Error('Failed to load audit log');
+    const data = await res.json();
+    renderAuditLog(data.logs || []);
+  } catch (err) {
+    els.auditList.innerHTML = `<div class="empty">${err.message}</div>`;
+  }
+}
+
+function renderAuditLog(logs) {
+  if (logs.length === 0) {
+    els.auditList.innerHTML = '<div class="empty">No admin activity logged yet.</div>';
+    return;
+  }
+  els.auditList.innerHTML = logs.map((l) => `
+    <div class="report">
+      <div class="who">${escapeHtml(l.adminEmail)} &mdash; ${escapeHtml(l.action)}</div>
+      <div class="details">
+        ${l.targetUserId ? `Target: ${escapeHtml(l.targetUserId)}` : ''}
+        ${l.detail ? ` &middot; ${escapeHtml(l.detail)}` : ''}
+      </div>
+      <div class="meta">${new Date(l.createdAt).toLocaleString()}</div>
+    </div>
+  `).join('');
+}
 
 // Auto-login if a token is already stashed from a previous session — re-fetches permissions
 // fresh from /admin-auth/me rather than trusting a stale localStorage copy.

@@ -331,6 +331,25 @@ model AdminUser {
   createdById String?
 }
 
+// Records sensitive admin reads — viewing a full profile, a chat transcript, or the user
+// directory/search — that otherwise leave no trace at all (unlike an approve/reject decision,
+// which already lands somewhere: Photo.rejectedByAdminId, Report.reviewedById, etc.). Exists so
+// "who looked at my account, and when" has an actual answer.
+model AdminAuditLog {
+  id      String @id @default(uuid())
+  // Plain strings, not relations — same reasoning as Report.reviewedById above: audit-only,
+  // never joined on, shouldn't block deleting either side later. Email is denormalized at write
+  // time so a log entry stays readable even after the admin account (or the viewed user) is gone.
+  adminId    String
+  adminEmail String
+  action     String
+  targetUserId String?
+  // Free-form context specific to the action — e.g. the search query for a "viewed user list"
+  // entry, or the other participant's id for a "viewed chat" entry.
+  detail     String?
+  createdAt  DateTime @default(now())
+}
+
 // Self-hosted onboarding funnel tracking — deliberately not a third-party analytics SDK
 // (Amplitude/Mixpanel/etc.), since the Privacy Policy already states none exist. One row per
 // "user reached this step" event (see OnboardingView.swift's `advance()`/`finish()`), so an

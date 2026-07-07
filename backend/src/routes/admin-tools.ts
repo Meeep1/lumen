@@ -4,10 +4,11 @@
 
 import { FastifyInstance } from 'fastify';
 import { prisma } from '../server';
-import { authenticateAdmin, requirePermission } from '../middleware/adminAuth';
+import { authenticateAdmin, requirePermission, requireSuperAdmin } from '../middleware/adminAuth';
 import { sendToUser } from '../socket/handlers';
 import { getPresignedUrl } from '../utils/storage';
 import { sendPushNotification } from '../utils/apns';
+import { logAdminView } from '../utils/adminAudit';
 
 export default async function adminToolsRoutes(fastify: FastifyInstance) {
   // Full profile for the admin site's "View Profile" modal — used both from the Reports tab
@@ -27,6 +28,8 @@ export default async function adminToolsRoutes(fastify: FastifyInstance) {
       if (!user) {
         return reply.status(404).send({ error: 'User not found' });
       }
+
+      await logAdminView(request.adminId!, request.adminEmail!, 'view_profile', userId);
 
       const photos = await Promise.all(
         user.photos.map(async (photo) => ({
@@ -94,6 +97,8 @@ export default async function adminToolsRoutes(fastify: FastifyInstance) {
         return reply.send({ hasMatch: false, messages: [] });
       }
 
+      await logAdminView(request.adminId!, request.adminEmail!, 'view_messages', userA, `with ${userB}`);
+
       const messages = await prisma.message.findMany({
         where: { matchId: match.id },
         orderBy: { createdAt: 'asc' },
@@ -113,6 +118,74 @@ export default async function adminToolsRoutes(fastify: FastifyInstance) {
     } catch (error) {
       fastify.log.error(error);
       return reply.status(500).send({ error: 'Failed to fetch messages' });
+    }
+  });
+
+  // Directory + search across every user — the admin panel's Users tab. Deliberately its own
+  // permission ('users'), not reused from 'reports'/'moderation' — those only ever surface a
+  // user someone already reported or a photo someone already flagged, while this exposes every
+  // account regardless of any of that, so it gets its own opt-in grant rather than riding along
+  // with a narrower one that was never meant to cover unrestricted browsing.
+  fastify.get('/users', { preHandler: [authenticateAdmin, requirePermission('users')] }, async (request, reply) => {
+    try {
+      const { search, page: pageRaw } = request.query as { search?: string; page?: string };
+      const page = Math.max(1, parseInt(pageRaw || '1', 10) || 1);
+      const pageSize = 50;
+
+      const where = search
+        ? {
+            OR: [
+              { email: { contains: search, mode: 'insensitive' as const } },
+              { phone: { contains: search } },
+              { cityDisplay: { contains: search, mode: 'insensitive' as const } },
+              { id: search },
+            ],
+          }
+        : {};
+
+      const [total, users] = await Promise.all([
+        prisma.user.count({ where }),
+        prisma.user.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+          select: {
+            id: true,
+            email: true,
+            phone: true,
+            cityDisplay: true,
+            isVerified: true,
+            isSuspended: true,
+            isActive: true,
+            createdAt: true,
+            lastActiveAt: true,
+          },
+        }),
+      ]);
+
+      await logAdminView(request.adminId!, request.adminEmail!, 'view_user_list', undefined, search || undefined);
+
+      return reply.send({ users, total, page, pageSize });
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: 'Failed to fetch users' });
+    }
+  });
+
+  // The audit trail itself — who's been looking at what, and when (see AdminAuditLog's own
+  // schema.prisma comment). Super-admin only: letting a regular moderator read this would let
+  // them check whether their own activity is being watched, which defeats the point.
+  fastify.get('/audit-log', { preHandler: [authenticateAdmin, requireSuperAdmin] }, async (request, reply) => {
+    try {
+      const logs = await prisma.adminAuditLog.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 200,
+      });
+      return reply.send({ logs });
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: 'Failed to fetch audit log' });
     }
   });
 
