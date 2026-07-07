@@ -48,6 +48,15 @@ struct SettingsView: View {
                             Divider().padding(.leading, 52)
 
                             NavigationLink {
+                                UpdateLocationView()
+                            } label: {
+                                SettingsRow(icon: "location.fill", title: "Update Location", valueText: authManager.currentUser?.cityDisplay)
+                            }
+                            .buttonStyle(.plain)
+
+                            Divider().padding(.leading, 52)
+
+                            NavigationLink {
                                 BlockedUsersView()
                             } label: {
                                 SettingsRow(icon: "person.crop.circle.badge.xmark", title: "Blocked Users")
@@ -264,6 +273,129 @@ struct SettingsRow: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
         .contentShape(Rectangle())
+    }
+}
+
+/// Onboarding's LocationStepView only ever runs once, at signup — there was previously no way
+/// for someone to correct or refresh their saved city afterward (a stale value from before a
+/// reverse-geocoding fix, or just having moved), short of deleting and recreating their account.
+/// This mirrors that same request-location-then-save flow, just reachable from Settings instead
+/// and without an onContinue step to chain into.
+struct UpdateLocationView: View {
+    @EnvironmentObject var authManager: AuthenticationManager
+    @Environment(\.dismiss) var dismiss
+    @StateObject private var locationManager = LocationManager.shared
+    @State private var isSaving = false
+    @State private var saveError: String?
+    @State private var didSave = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            LumenHeader(title: "Update Location", leading: {
+                LumenBackButton()
+            })
+
+            VStack(spacing: 24) {
+                Spacer()
+
+                Image(systemName: "location.circle.fill")
+                    .resizable()
+                    .frame(width: 80, height: 80)
+                    .foregroundStyle(Theme.primaryGradient)
+
+                Text("Update your location")
+                    .font(.title.bold())
+
+                Text("Refreshes your city from your current location. We only ever show your city and distance to others, never your exact location.")
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 32)
+
+                if let current = authManager.currentUser?.cityDisplay, locationManager.resolvedLocation == nil {
+                    Label("Currently: \(current)", systemImage: "mappin.circle")
+                        .foregroundStyle(.secondary)
+                }
+
+                if let city = locationManager.resolvedLocation?.cityDisplay {
+                    Label(didSave ? "Updated to \(city)" : city, systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                }
+
+                if let error = locationManager.errorMessage ?? saveError {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+
+                    if locationManager.authorizationStatus == .denied {
+                        Button("Open Settings") {
+                            if let url = URL(string: UIApplication.openSettingsURLString) {
+                                UIApplication.shared.open(url)
+                            }
+                        }
+                        .font(.subheadline)
+                        .buttonStyle(LumenPressableStyle())
+                    }
+                }
+
+                Spacer()
+
+                Button {
+                    if didSave {
+                        dismiss()
+                    } else if locationManager.resolvedLocation != nil {
+                        Task { await save() }
+                    } else {
+                        locationManager.requestLocation()
+                    }
+                } label: {
+                    if locationManager.isResolving || isSaving {
+                        ProgressView().tint(.white)
+                    } else if didSave {
+                        Text("Done")
+                    } else {
+                        Text(locationManager.resolvedLocation != nil ? "Save" : "Refresh Location")
+                    }
+                }
+                .buttonStyle(LumenPrimaryButtonStyle())
+                .padding(.horizontal, 32)
+                .disabled(locationManager.isResolving || isSaving)
+                .padding(.bottom, 32)
+            }
+        }
+        .toolbar(.hidden, for: .navigationBar)
+    }
+
+    private func save() async {
+        guard let resolved = locationManager.resolvedLocation else { return }
+        isSaving = true
+        saveError = nil
+        defer { isSaving = false }
+
+        let update = ProfileUpdate(
+            bio: nil,
+            pronouns: nil,
+            styleTags: nil,
+            heightInches: nil,
+            jobTitle: nil,
+            school: nil,
+            prompt1Question: nil,
+            prompt1Answer: nil,
+            prompt2Question: nil,
+            prompt2Answer: nil,
+            latitude: resolved.latitude,
+            longitude: resolved.longitude,
+            cityDisplay: resolved.cityDisplay,
+            discoverable: nil
+        )
+
+        switch await authManager.updateProfile(update) {
+        case .success:
+            didSave = true
+        case .failure(let error):
+            saveError = error.localizedDescription
+        }
     }
 }
 
