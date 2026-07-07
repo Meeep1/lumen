@@ -669,6 +669,18 @@ class APIService {
         )
     }
     
+    // MARK: - Feedback Endpoints
+
+    func submitFeedback(message: String) async throws {
+        struct Request: Codable { let message: String }
+        struct Response: Codable { let message: String }
+        let _: Response = try await request(
+            endpoint: "/feedback",
+            method: "POST",
+            body: Request(message: message)
+        )
+    }
+
     // MARK: - Block Endpoints
     
     func blockUser(userId: String) async throws {

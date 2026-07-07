@@ -7,6 +7,7 @@ import { prisma } from '../server';
 import { authenticateAdmin, requirePermission } from '../middleware/adminAuth';
 import { sendToUser } from '../socket/handlers';
 import { getPresignedUrl } from '../utils/storage';
+import { sendPushNotification } from '../utils/apns';
 
 export default async function adminToolsRoutes(fastify: FastifyInstance) {
   // Full profile for the admin site's "View Profile" modal — used both from the Reports tab
@@ -228,6 +229,56 @@ export default async function adminToolsRoutes(fastify: FastifyInstance) {
     } catch (error) {
       fastify.log.error(error);
       return reply.status(500).send({ error: 'Failed to compute onboarding funnel' });
+    }
+  });
+
+  // Broadcast a custom push to every device with a registered token — announcing something to
+  // the whole userbase (a new feature, planned downtime) without needing direct database
+  // access. Deliberately no notifyXxx preference check, unlike per-event notifications: this is
+  // a rare, admin-initiated announcement a person explicitly chose to send, not an automated
+  // per-event notification someone should be able to individually opt out of. Runs synchronously
+  // in the request — fine at this app's current user count; would need a background job if the
+  // userbase ever grows into the thousands.
+  fastify.post('/broadcast-push', { preHandler: [authenticateAdmin, requirePermission('testTools')] }, async (request, reply) => {
+    try {
+      const { title, body } = request.body as { title?: string; body?: string };
+      if (!title?.trim() || !body?.trim()) {
+        return reply.status(400).send({ error: 'title and body are required' });
+      }
+
+      const recipients = await prisma.user.findMany({
+        where: { pushToken: { not: null } },
+        select: { id: true, pushToken: true },
+      });
+
+      let sent = 0;
+      let failed = 0;
+      for (const recipient of recipients) {
+        const result = await sendPushNotification(recipient.pushToken!, {
+          title: title.trim(),
+          body: body.trim(),
+        });
+        if (result.ok) {
+          sent += 1;
+        } else {
+          failed += 1;
+          if (result.reason === 'invalid-token') {
+            await prisma.user.update({
+              where: { id: recipient.id },
+              data: { pushToken: null, pushPlatform: null },
+            });
+          }
+        }
+      }
+
+      return reply.send({
+        message: `Sent to ${sent} device${sent === 1 ? '' : 's'}${failed ? `, ${failed} failed` : ''}.`,
+        sent,
+        failed,
+      });
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: 'Failed to send broadcast' });
     }
   });
 }

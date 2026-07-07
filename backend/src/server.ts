@@ -21,6 +21,7 @@ import reportRoutes from './routes/report';
 import blockRoutes from './routes/block';
 import accountRoutes from './routes/account';
 import verificationRoutes from './routes/verification';
+import feedbackRoutes from './routes/feedback';
 import adminAuthRoutes from './routes/admin-auth';
 import adminToolsRoutes from './routes/admin-tools';
 import moderationRoutes from './routes/moderation';
@@ -146,6 +147,7 @@ async function registerRoutes() {
   await fastify.register(blockRoutes, { prefix: '/blocks' });
   await fastify.register(accountRoutes);
   await fastify.register(verificationRoutes, { prefix: '/verification' });
+  await fastify.register(feedbackRoutes, { prefix: '/feedback' });
 
   // Deliberately NOT wrapped in requireBasicAuth (unlike the static /admin/ site above) — every
   // route in all three of these files already requires a valid AdminUser Bearer token

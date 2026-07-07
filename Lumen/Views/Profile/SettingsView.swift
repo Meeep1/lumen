@@ -82,6 +82,17 @@ struct SettingsView: View {
                         }
                     }
 
+                    SettingsSection(title: "Support") {
+                        SettingsCard {
+                            NavigationLink {
+                                FeedbackView()
+                            } label: {
+                                SettingsRow(icon: "bubble.left.and.exclamationmark.bubble.right.fill", title: "Send Feedback")
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
                     SettingsSection(title: "About") {
                         SettingsCard {
                             // Real pages (backend/public/site/), served by the same backend as
@@ -395,6 +406,111 @@ struct UpdateLocationView: View {
             didSave = true
         case .failure(let error):
             saveError = error.localizedDescription
+        }
+    }
+}
+
+/// One-way "tell us something" box, read from the admin panel's Feedback tab, not a support
+/// ticket with a reply loop — matches backend/prisma/schema.prisma's Feedback model comment.
+struct FeedbackView: View {
+    @Environment(\.dismiss) var dismiss
+    @State private var message = ""
+    @State private var isSending = false
+    @State private var sendError: String?
+    @State private var didSend = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            LumenHeader(title: "Send Feedback", leading: {
+                LumenBackButton()
+            })
+
+            VStack(spacing: 20) {
+                if didSend {
+                    Spacer()
+
+                    Image(systemName: "checkmark.circle.fill")
+                        .resizable()
+                        .frame(width: 64, height: 64)
+                        .foregroundStyle(.green.gradient)
+
+                    Text("Thanks!")
+                        .font(.title2.bold())
+
+                    Text("Your feedback goes straight to the team.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+
+                    Button {
+                        dismiss()
+                    } label: {
+                        Text("Done")
+                    }
+                    .buttonStyle(LumenPrimaryButtonStyle())
+                    .padding(.horizontal, 32)
+                    .padding(.bottom, 32)
+                } else {
+                    Text("What's on your mind?")
+                        .font(.title2.bold())
+                        .padding(.top, 24)
+
+                    Text("Bug reports, feature ideas, anything at all. This goes directly to the team, not a bot.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+
+                    TextEditor(text: $message)
+                        .padding(8)
+                        .background(Color.lumenSurface)
+                        .cornerRadius(14)
+                        .frame(height: 180)
+                        .padding(.horizontal, 24)
+
+                    if let sendError {
+                        Text(sendError)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 32)
+                    }
+
+                    Spacer()
+
+                    Button {
+                        Task { await send() }
+                    } label: {
+                        if isSending {
+                            ProgressView().tint(.white)
+                        } else {
+                            Text("Send")
+                        }
+                    }
+                    .buttonStyle(LumenPrimaryButtonStyle(isEnabled: !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
+                    .disabled(message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending)
+                    .padding(.horizontal, 32)
+                    .padding(.bottom, 32)
+                }
+            }
+        }
+        .toolbar(.hidden, for: .navigationBar)
+    }
+
+    private func send() async {
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        isSending = true
+        sendError = nil
+        defer { isSending = false }
+
+        do {
+            try await APIService.shared.submitFeedback(message: trimmed)
+            didSend = true
+        } catch {
+            sendError = error.localizedDescription
         }
     }
 }

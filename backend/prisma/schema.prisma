@@ -157,6 +157,8 @@ model User {
   blocksReceived Block[] @relation("BlocksReceived")
 
   onboardingEvents OnboardingEvent[]
+
+  feedbackSubmitted Feedback[]
 }
 
 model Photo {
@@ -330,6 +332,18 @@ model OnboardingEvent {
   id        String   @id @default(uuid())
   userId    String
   step      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Free-text feedback from Settings — deliberately no status/reply workflow like Report has
+// (pending/actioned, admin notes): this is a one-way "tell us something" box, read from the
+// admin panel's Feedback tab, not a support ticket system with a response loop.
+model Feedback {
+  id        String   @id @default(uuid())
+  userId    String
+  message   String
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

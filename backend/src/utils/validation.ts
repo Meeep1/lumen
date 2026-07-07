@@ -158,3 +158,7 @@ export const reportSchema = z.object({
 export const blockSchema = z.object({
   blockedId: z.string().uuid(),
 });
+
+export const feedbackSchema = z.object({
+  message: z.string().trim().min(1).max(2000),
+});

@@ -560,6 +560,7 @@
       <div class="sidebar-title">Menu</div>
       <div class="section-nav">
         <button data-section="reports" data-permission="reports" class="active"><span class="nav-icon">🚩</span> Reports</button>
+        <button data-section="feedback" data-permission="reports"><span class="nav-icon">💬</span> Feedback</button>
         <button data-section="verification" data-permission="verification"><span class="nav-icon">✅</span> Verification</button>
         <button data-section="photos" data-permission="moderation"><span class="nav-icon">🖼️</span> Photos</button>
         <button data-section="appeals" data-permission="moderation"><span class="nav-icon">🔁</span> Appeals</button>
@@ -580,6 +581,14 @@
         <button id="refreshBtn" class="ghost" style="margin-left:auto">Refresh</button>
       </div>
       <div id="reportsList"></div>
+    </div>
+
+    <div id="feedbackSection" class="hidden">
+      <div class="tabs">
+        <span style="font-size:13px;color:var(--muted)">Free-text feedback submitted from the app, most recent first.</span>
+        <button id="feedbackRefreshBtn" class="ghost" style="margin-left:auto">Refresh</button>
+      </div>
+      <div id="feedbackList"></div>
     </div>
 
     <div id="verificationSection" class="hidden">
@@ -738,6 +747,23 @@
         <button class="primary" id="testSendBtn" style="margin-top:16px;width:100%">Send</button>
         <div id="testToolsStatus" class="tool-status"></div>
       </div>
+
+      <div class="tool-card" style="margin-top:20px">
+        <h3 style="margin-top:0">Broadcast a push notification</h3>
+        <p style="font-size:13px;color:var(--muted);margin-top:-8px">
+          Sends to every device with notifications enabled: every real user, all at once.
+          There's no undo once you hit send.
+        </p>
+
+        <label for="broadcastTitle">Title</label>
+        <input id="broadcastTitle" type="text" placeholder="e.g. New feature">
+
+        <label for="broadcastBody">Message</label>
+        <textarea id="broadcastBody" placeholder="What do you want everyone to know?"></textarea>
+
+        <button class="reject" id="broadcastSendBtn" style="margin-top:16px;width:100%">Send to Everyone</button>
+        <div id="broadcastStatus" class="tool-status"></div>
+      </div>
     </div>
 
     <div id="analyticsSection" class="hidden">
@@ -783,6 +809,9 @@ const els = {
   tabs: document.querySelectorAll('.tabs button[data-status]'),
   sectionNav: document.querySelectorAll('.section-nav button[data-section]'),
   reportsSection: document.getElementById('reportsSection'),
+  feedbackSection: document.getElementById('feedbackSection'),
+  feedbackList: document.getElementById('feedbackList'),
+  feedbackRefreshBtn: document.getElementById('feedbackRefreshBtn'),
   verificationSection: document.getElementById('verificationSection'),
   verificationList: document.getElementById('verificationList'),
   verificationRefreshBtn: document.getElementById('verificationRefreshBtn'),
@@ -804,6 +833,10 @@ const els = {
   testMessageContent: document.getElementById('testMessageContent'),
   testSendBtn: document.getElementById('testSendBtn'),
   testToolsStatus: document.getElementById('testToolsStatus'),
+  broadcastTitle: document.getElementById('broadcastTitle'),
+  broadcastBody: document.getElementById('broadcastBody'),
+  broadcastSendBtn: document.getElementById('broadcastSendBtn'),
+  broadcastStatus: document.getElementById('broadcastStatus'),
   analyticsSection: document.getElementById('analyticsSection'),
   onboardingFunnel: document.getElementById('onboardingFunnel'),
   analyticsRefreshBtn: document.getElementById('analyticsRefreshBtn'),
@@ -934,6 +967,7 @@ els.sectionNav.forEach((btn) => {
     btn.classList.add('active');
     const section = btn.dataset.section;
     els.reportsSection.classList.toggle('hidden', section !== 'reports');
+    els.feedbackSection.classList.toggle('hidden', section !== 'feedback');
     els.verificationSection.classList.toggle('hidden', section !== 'verification');
     els.photosSection.classList.toggle('hidden', section !== 'photos');
     els.appealsSection.classList.toggle('hidden', section !== 'appeals');
@@ -942,6 +976,7 @@ els.sectionNav.forEach((btn) => {
     els.analyticsSection.classList.toggle('hidden', section !== 'analytics');
     els.teamSection.classList.toggle('hidden', section !== 'team');
     if (section === 'reports') loadReports();
+    if (section === 'feedback') loadFeedback();
     if (section === 'verification') loadVerification();
     if (section === 'photos') loadPhotos();
     if (section === 'appeals') loadAppeals();
@@ -1155,6 +1190,46 @@ els.testSendBtn.addEventListener('click', async () => {
   }
 });
 
+els.broadcastSendBtn.addEventListener('click', async () => {
+  els.broadcastStatus.textContent = '';
+  els.broadcastStatus.className = 'tool-status';
+
+  const title = els.broadcastTitle.value.trim();
+  const body = els.broadcastBody.value.trim();
+
+  if (!title || !body) {
+    els.broadcastStatus.textContent = 'Fill in both fields.';
+    els.broadcastStatus.classList.add('error');
+    return;
+  }
+
+  // A broad, hard-to-undo action (every real device, no way to recall it) — confirm before
+  // firing, same reasoning as the delete/unmatch confirmations elsewhere in this panel.
+  if (!confirm(`Send "${title}" to every device with notifications enabled? This can't be undone.`)) {
+    return;
+  }
+
+  els.broadcastSendBtn.disabled = true;
+  try {
+    const res = await authedFetch('/admin-tools/broadcast-push', {
+      method: 'POST',
+      body: JSON.stringify({ title, body }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to send');
+
+    els.broadcastStatus.textContent = data.message;
+    els.broadcastStatus.classList.add('success');
+    els.broadcastTitle.value = '';
+    els.broadcastBody.value = '';
+  } catch (err) {
+    els.broadcastStatus.textContent = err.message;
+    els.broadcastStatus.classList.add('error');
+  } finally {
+    els.broadcastSendBtn.disabled = false;
+  }
+});
+
 els.verificationTabs.forEach((btn) => {
   btn.addEventListener('click', () => {
     els.verificationTabs.forEach((b) => b.classList.remove('active'));
@@ -1275,6 +1350,35 @@ function renderReports(data) {
     </div>
   `).join('');
 }
+
+async function loadFeedback() {
+  els.feedbackList.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const res = await authedFetch('/feedback/admin');
+    if (!res.ok) throw new Error('Failed to load feedback');
+    renderFeedback(await res.json());
+  } catch (err) {
+    els.feedbackList.innerHTML = `<div class="empty">${err.message}</div>`;
+  }
+}
+
+function renderFeedback(data) {
+  const feedback = data.feedback || [];
+  if (feedback.length === 0) {
+    els.feedbackList.innerHTML = '<div class="empty">No feedback yet.</div>';
+    return;
+  }
+
+  els.feedbackList.innerHTML = feedback.map((f) => `
+    <div class="report">
+      <div class="who">${escapeHtml(f.email)}</div>
+      <div class="details">${escapeHtml(f.message)}</div>
+      <div class="meta">${new Date(f.createdAt).toLocaleString()}</div>
+    </div>
+  `).join('');
+}
+
+els.feedbackRefreshBtn.addEventListener('click', loadFeedback);
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
