@@ -629,11 +629,11 @@
             <span class="threshold-note">most uploads</span>
           </div>
           <div class="threshold-track">
-            <div class="threshold-zone approved" style="width:5%"></div><div class="threshold-zone pending" style="width:70%"><span class="threshold-zone-label">PENDING REVIEW</span></div><div class="threshold-zone rejected" style="width:25%"><span class="threshold-zone-label">REJECTED</span></div>
+            <div class="threshold-zone approved" style="width:30%"></div><div class="threshold-zone pending" style="width:45%"><span class="threshold-zone-label">PENDING REVIEW</span></div><div class="threshold-zone rejected" style="width:25%"><span class="threshold-zone-label">REJECTED</span></div>
           </div>
           <div class="threshold-ticks">
             <div class="threshold-tick" style="left:0%"><div class="stem"></div><div class="pct">0%</div></div>
-            <div class="threshold-tick" style="left:5%"><div class="stem"></div><div class="pct">5%</div></div>
+            <div class="threshold-tick" style="left:30%"><div class="stem"></div><div class="pct">30%</div></div>
             <div class="threshold-tick" style="left:75%"><div class="stem"></div><div class="pct">75%</div></div>
             <div class="threshold-tick" style="left:100%"><div class="stem"></div><div class="pct">100%</div></div>
           </div>
@@ -692,7 +692,7 @@
             <tr>
               <td class="score-name">Hentai</td>
               <td class="score-role">Explicit illustrated/anime content.</td>
-              <td class="score-role">Combines with Porn into the same explicit score. Also the main reason a photo counts as "looks like a drawing."</td>
+              <td class="score-role">Combines with Porn into the same explicit score. &ge; 15% alone also switches the photo onto the "looks like a drawing" track, same as the Drawing class below, since Hentai by definition means illustrated content.</td>
             </tr>
             <tr>
               <td class="score-name">Sexy</td>
@@ -702,7 +702,7 @@
             <tr>
               <td class="score-name">Drawing</td>
               <td class="score-role">Illustration/art signal, not necessarily explicit.</td>
-              <td class="score-role">&ge; 15% switches the photo onto the "looks like a drawing" track: a much higher pending bar (35%), and outright rejection is never allowed.</td>
+              <td class="score-role">&ge; 15% (or Hentai &ge; 15%, see above) switches the photo onto the "looks like a drawing" track: a much higher pending bar (35%), and outright rejection is never allowed.</td>
             </tr>
             <tr>
               <td class="score-name">Neutral</td>

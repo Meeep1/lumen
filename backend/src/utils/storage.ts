@@ -162,6 +162,29 @@ export function preloadModerationModel(): ReturnType<typeof nsfwjs.load> {
 ///     `looksLikeDrawing` is true — real photos (the pass-4 case this 0.05 floor exists for)
 ///     are completely unaffected by this since they don't hit `looksLikeDrawing` in the first
 ///     place.
+///   - Pass 6 (current): two more real, conflicting data points arrived close together. A
+///     completely SFW drawing scored Hentai 89% alone (no corresponding Drawing-class score
+///     high enough to trip the pass-5 `looksLikeDrawing` leeway), so it was being treated as
+///     if it were a real explicit photo, right up to outright auto-rejection. Separately, a
+///     perfectly ordinary clothed photo (a skirt) scored Porn 20% / Sexy 70% / Neutral 5% — and
+///     20% alone was already above pass 4/5's pendingThreshold (0.05), so it landed in the
+///     review queue for no real reason.
+///     These two data points directly conflict with pass 4's own bad example (Porn+Hentai
+///     ≈ 0.10): a threshold that low-enough to catch 0.10 will always also catch the skirt
+///     photo's 0.20, since 0.10 < 0.20. The combined-score signal alone can't separate them at
+///     this granularity — something has to give, and per explicit product direction the
+///     priority is fewer false positives on ordinary/suggestive photos, accepting that a
+///     repeat of the pass-4 case might not trip pendingThreshold on its own anymore (Sexy 14%
+///     wouldn't reach the pass-6 Sexy bar either). Raised pendingThreshold 0.05 -> 0.3 — the
+///     skirt photo's own numbers (Porn 20 / Sexy 70 / Neutral 5) leave at most 5 points split
+///     between Hentai and Drawing, so its worst-case Porn+Hentai is ~0.25; 0.3 clears that with
+///     real margin rather than sitting right on the boundary.
+///     Separately, `looksLikeDrawing` now also triggers on a high Hentai score by itself, not
+///     just the Drawing class — Hentai's own definition (explicit *illustrated* content) already
+///     implies "this is art," so treating it as its own independent drawing-leeway signal covers
+///     exactly the failure case above: whatever score Hentai gets, an actually-explicit
+///     illustration still lands in pending (a human decides), it just can never again be
+///     auto-deleted with no one looking at it first.
 /// Still only a handful of confirmed real data points — treat this as a working hypothesis that
 /// improves as the admin Photos queue collects more, not a solved problem.
 /// Sexy raised from 0.5 to 0.8 (product decision: suggestive-but-not-explicit content, swimwear,
@@ -210,7 +233,7 @@ export async function moderateImage(imageBytes: Buffer): Promise<{
   const drawingScore = scoreFor('Drawing');
 
   const rejectThreshold = parseFloat(process.env.MODERATION_REJECT_SCORE || '0.75');
-  const pendingThreshold = parseFloat(process.env.MODERATION_PENDING_SCORE || '0.05');
+  const pendingThreshold = parseFloat(process.env.MODERATION_PENDING_SCORE || '0.3');
   const sexyPendingThreshold = parseFloat(process.env.MODERATION_SEXY_PENDING_SCORE || '0.8');
   const drawingLeewayThreshold = parseFloat(process.env.MODERATION_DRAWING_LEEWAY_SCORE || '0.15');
   // Only applies once looksLikeDrawing is true (see below) — real photos still use the much
@@ -234,7 +257,16 @@ export async function moderateImage(imageBytes: Buffer): Promise<{
   // review if it trips a threshold, a human just makes the final call instead of an instant
   // auto-delete. A real photo of an actual person should score Drawing near zero regardless, so
   // this shouldn't weaken protection against real explicit photos.
-  const looksLikeDrawing = drawingScore >= drawingLeewayThreshold;
+  //
+  // Also triggered by a high Hentai score on its own (see this function's doc comment, Pass 6):
+  // a real, confirmed-SFW drawing scored Hentai 89% with the Drawing class itself not crossing
+  // the leeway floor, so relying on the Drawing class alone missed it entirely. Hentai's own
+  // definition (explicit *illustrated* content) already means "this is art" regardless of what
+  // the separate Drawing class happened to score — a real photo of an actual person should score
+  // Hentai near zero same as Drawing, so this doesn't weaken protection against real explicit
+  // photos either.
+  const looksLikeDrawing =
+    drawingScore >= drawingLeewayThreshold || scoreFor('Hentai') >= drawingLeewayThreshold;
 
   if (explicitScore >= rejectThreshold && !looksLikeDrawing) {
     return { status: 'rejected', labels };
