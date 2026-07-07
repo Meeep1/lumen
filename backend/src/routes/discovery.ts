@@ -4,6 +4,7 @@ import { authenticate } from '../middleware/auth';
 import { discoveryFiltersSchema, zodErrorMessage } from '../utils/validation';
 import { getPresignedUrl } from '../utils/storage';
 import { calculateDistance } from '../utils/geo';
+import { SEED_EMAIL_SUFFIX } from '../utils/testAccount';
 
 export default async function discoveryRoutes(fastify: FastifyInstance) {
   fastify.get('/stack', { preHandler: authenticate }, async (request, reply) => {
@@ -74,6 +75,14 @@ export default async function discoveryRoutes(fastify: FastifyInstance) {
         latitude: { not: null },
         longitude: { not: null },
       };
+
+      // Seed profiles (`+seed@lumen.test`, see prisma/seed.ts) and the reviewer account itself
+      // exist only so the isTestAccount App Store reviewer never sees an empty Discovery/Likes
+      // You — every other real user should never see either mixed in with real profiles.
+      if (!currentUser.isTestAccount) {
+        whereClause.email = { not: { endsWith: SEED_EMAIL_SUFFIX } };
+        whereClause.isTestAccount = false;
+      }
 
       // Apply gender identity filter if specified
       if (filters.genderIdentities && filters.genderIdentities.length > 0) {

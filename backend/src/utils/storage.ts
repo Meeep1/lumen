@@ -43,15 +43,35 @@ export async function uploadPhoto(
   const filename = `${id}.jpg`;
   const filepath = path.join(userDir, filename);
 
+  // Normalize the original before writing it, rather than storing the raw upload as-is:
+  //   - `.rotate()` with no args auto-orients from the EXIF tag and then strips it. A phone
+  //     photo is very often stored as landscape pixel data plus a "rotate 90 to display" EXIF
+  //     flag — a client that respects EXIF (UIImage does) shows it correctly, but `sharp`
+  //     resize operations ignore EXIF unless told to auto-orient first, so anything built from
+  //     the raw buffer (the thumbnail below, moderateImage()'s own resize) came out sideways
+  //     for exactly the photos where this mattered. Normalizing once here, rather than adding
+  //     `.rotate()` to every separate consumer, fixes it everywhere at once.
+  //   - Capping the long edge at 1600px is plenty sharp on any real device (a 3x-retina phone
+  //     at typical screen width needs well under that) but meaningfully shrinks what a modern
+  //     phone photo actually uploads at (often 3000-4000px+) — the same "why load more than
+  //     will ever be shown" reasoning as the thumbnail, just for the sizes that do need to be
+  //     shown large (a Discovery card, a full profile view).
+  const normalizedBuffer = await sharp(buffer)
+    .rotate()
+    .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
+    .jpeg({ quality: 85 })
+    .toBuffer();
+
   // Save file to disk
-  fs.writeFileSync(filepath, buffer);
+  fs.writeFileSync(filepath, normalizedBuffer);
 
   // A small resized copy alongside the original — see schema.prisma's Photo.thumbnailUrl
   // comment for why this exists. Same stretch/crop-to-fill sizing regardless of the source
   // photo's own aspect ratio, since every place this gets shown small is itself a fixed square
-  // box (a 56x56 list row, a 96x96 admin queue cell).
+  // box (a 56x56 list row, a 96x96 admin queue cell). Built from the already-normalized buffer
+  // above, not the raw upload, so it inherits the same correct orientation for free.
   const thumbFilename = `${id}_thumb.jpg`;
-  const thumbBuffer = await sharp(buffer).resize(300, 300, { fit: 'cover' }).jpeg({ quality: 80 }).toBuffer();
+  const thumbBuffer = await sharp(normalizedBuffer).resize(300, 300, { fit: 'cover' }).jpeg({ quality: 80 }).toBuffer();
   fs.writeFileSync(path.join(userDir, thumbFilename), thumbBuffer);
 
   // Return relative paths (used as identifiers)
@@ -222,7 +242,12 @@ export async function moderateImage(imageBytes: Buffer): Promise<{
   // stretch-not-crop semantics nsfwjs's internal resize already uses, means its `shape[0] !==
   // size` check finds an exact match and skips its own resize entirely — identical
   // classification result, at a small fraction of the memory.
+  // .rotate() with no args auto-orients from EXIF before resizing — a defensive no-op for
+  // anything uploaded after uploadPhoto() started normalizing orientation itself, but real
+  // protection for photos already on disk from before that fix, which could otherwise still
+  // get classified sideways.
   const { data, info } = await sharp(imageBytes)
+    .rotate()
     .resize(224, 224, { fit: 'fill' })
     .removeAlpha()
     .raw()

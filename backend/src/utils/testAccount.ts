@@ -2,8 +2,10 @@ import { PrismaClient } from '@prisma/client';
 
 /** Same suffix `prisma/seed.ts` uses to tag every fake profile it creates — reusing it here
  * rather than a new schema flag, since it's already the established way to identify "not a
- * real account" rows. */
-const SEED_EMAIL_SUFFIX = '+seed@lumen.test';
+ * real account" rows. Exported so discovery.ts/swipe.ts can exclude these profiles from every
+ * real user's Discovery stack and Likes You — they exist solely so the `isTestAccount` reviewer
+ * account never sees an empty one, not to populate real users' feeds. */
+export const SEED_EMAIL_SUFFIX = '+seed@lumen.test';
 
 /**
  * Wipes a test account's profile back to a blank, pre-onboarding state on every login, so an

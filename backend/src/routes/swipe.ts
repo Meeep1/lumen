@@ -5,6 +5,7 @@ import { swipeSchema, zodErrorMessage } from '../utils/validation';
 import { getPresignedUrl } from '../utils/storage';
 import { calculateDistance } from '../utils/geo';
 import { notifyUser } from '../utils/notify';
+import { SEED_EMAIL_SUFFIX } from '../utils/testAccount';
 
 export default async function swipeRoutes(fastify: FastifyInstance) {
   // Create a swipe
@@ -195,6 +196,7 @@ export default async function swipeRoutes(fastify: FastifyInstance) {
           prompt1Answer: true,
           prompt2Question: true,
           prompt2Answer: true,
+          isTestAccount: true,
         },
       });
 
@@ -202,6 +204,17 @@ export default async function swipeRoutes(fastify: FastifyInstance) {
         where: {
           swipedId: request.userId,
           direction: { in: ['like', 'super_like'] },
+          // Seed profiles' pre-seeded likes (see testAccount.ts's resetTestAccount) and the
+          // reviewer account itself exist only so the isTestAccount reviewer's Likes You is
+          // never empty — every other real user should never see either mixed in with real likes.
+          ...(currentUser?.isTestAccount
+            ? {}
+            : {
+                swiper: {
+                  email: { not: { endsWith: SEED_EMAIL_SUFFIX } },
+                  isTestAccount: false,
+                },
+              }),
         },
         include: {
           swiper: {
