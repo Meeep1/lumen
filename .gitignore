@@ -14,9 +14,9 @@ backend/prisma/*.db
 backend/prisma/*.db-journal
 
 # iOS / Xcode
-*.xcodeproj
-*.xcworkspace
-!*.xcworkspace/contents.xcworkspacedata
+# lumen.xcodeproj is deliberately tracked (not ignored) — it previously existed only on this one
+# Mac with no backup, including the LumenTests target/scheme. Per-user state within it
+# (xcuserdata/, WorkspaceSettings.xcsettings below) still isn't.
 /*.gcno
 **/xcshareddata/WorkspaceSettings.xcsettings
 
