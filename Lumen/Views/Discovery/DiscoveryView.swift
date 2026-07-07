@@ -65,10 +65,8 @@ struct DiscoveryView: View {
             .task {
                 await loadProfiles()
             }
-            .overlay {
-                if let matchedProfile {
-                    matchCelebration(profile: matchedProfile)
-                }
+            .fullScreenCover(item: $matchedProfile) { profile in
+                matchCelebration(profile: profile)
             }
             .navigationDestination(isPresented: $showingMatchChat) {
                 if let chatMatch {
@@ -238,14 +236,15 @@ struct DiscoveryView: View {
 
             if result.matched {
                 matchedMatchId = result.matchId
-                withAnimation {
-                    matchedProfile = profile
-                }
-                // Same mechanism ChatView uses to hide the custom tab bar (see TabBarVisibility) —
-                // without this, the celebration overlay's own .ignoresSafeArea() only reached up to
-                // wherever the tab bar's reserved safeAreaInset space began, leaving it visible
-                // (and tappable) at the bottom of an otherwise full-screen moment.
-                TabBarVisibility.shared.isHidden = true
+                // A plain .overlay here previously (to avoid a sheet-presentation dependency),
+                // but that only ever covered up to wherever MainTabView's tab bar reserved space
+                // began, leaving it visible underneath — and toggling that space away via a
+                // TabBarVisibility flag needed an extra safeAreaInset layout pass to propagate,
+                // which showed up as the celebration's own top/bottom edges visibly lagging a
+                // moment behind the rest of it. A fullScreenCover is a real, separate modal
+                // presentation — guaranteed genuinely full-screen from its very first frame,
+                // completely independent of whatever the tab bar underneath is doing.
+                matchedProfile = profile
                 // First natural moment there's actually something worth notifying about —
                 // see PushNotificationManager for why this isn't requested at launch instead.
                 PushNotificationManager.shared.requestPermissionIfNeeded()
@@ -345,11 +344,7 @@ struct DiscoveryView: View {
                             )
                             showingMatchChat = true
                         }
-                        // Deliberately not calling dismissMatchCelebration() here — that would
-                        // flip TabBarVisibility back to visible for a frame before ChatView's own
-                        // .onAppear (see TabBarVisibility) immediately hides it again. Leaving it
-                        // hidden through the transition avoids that flash.
-                        withAnimation { matchedProfile = nil }
+                        matchedProfile = nil
                     } label: {
                         Label("Send a Message", systemImage: "paperplane.fill")
                             .frame(maxWidth: .infinity)
@@ -370,7 +365,6 @@ struct DiscoveryView: View {
                 .padding(.top, 12)
             }
         }
-        .transition(.opacity.combined(with: .scale(scale: 0.9)))
         .onAppear {
             matchTextPop = false
             matchPhotoPop = false
@@ -388,8 +382,7 @@ struct DiscoveryView: View {
     }
 
     private func dismissMatchCelebration() {
-        withAnimation { matchedProfile = nil }
-        TabBarVisibility.shared.isHidden = false
+        matchedProfile = nil
     }
 }
 
