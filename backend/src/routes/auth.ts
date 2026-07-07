@@ -129,7 +129,24 @@ export default async function authRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({ error: 'OTP expired. Please request a new one.' });
       }
 
+      // Per-account lockout on top of the route's per-IP rate limit above — that limit alone
+      // doesn't stop an attacker who rotates source IPs from guessing a 6-digit code (~1M
+      // combinations) against one specific victim's account. 5 wrong guesses invalidates this
+      // OTP outright, same as if it expired; the real user just requests a new one.
+      const MAX_OTP_ATTEMPTS = 5;
+      if (user.otpAttempts >= MAX_OTP_ATTEMPTS) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { otpCode: null, otpExpiresAt: null, otpAttempts: 0 },
+        });
+        return reply.status(429).send({ error: 'Too many incorrect attempts. Please request a new code.' });
+      }
+
       if (user.otpCode !== data.code) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { otpAttempts: { increment: 1 } },
+        });
         return reply.status(400).send({ error: 'Invalid OTP code' });
       }
 
@@ -203,7 +220,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
 
       await prisma.user.update({
         where: { id: user.id },
-        data: { otpCode, otpExpiresAt },
+        data: { otpCode, otpExpiresAt, otpAttempts: 0 },
       });
 
       await sendOTPEmail(email, otpCode);
@@ -429,14 +446,31 @@ export default async function authRoutes(fastify: FastifyInstance) {
       // Generate new access token
       const accessToken = fastify.jwt.sign({ userId: storedToken.userId });
 
-      return reply.send({ accessToken });
+      // Rotate the refresh token itself on every use, rather than letting the same one stay
+      // valid for its full 7-day lifetime unchanged. A stolen refresh token (pulled from a
+      // device backup, say) could otherwise be replayed indefinitely within that window with no
+      // signal to anyone. Deleting the old row and minting a fresh token+expiry means the real
+      // client always carries the newest one after this call; if a stolen copy gets used
+      // first, the real client's *next* refresh attempt (now holding a deleted token) fails
+      // instead of both silently working forever side by side.
+      const newRefreshToken = generateRefreshToken();
+      const newRefreshExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+      await prisma.$transaction([
+        prisma.refreshToken.delete({ where: { id: storedToken.id } }),
+        prisma.refreshToken.create({
+          data: { token: newRefreshToken, userId: storedToken.userId, expiresAt: newRefreshExpiresAt },
+        }),
+      ]);
+
+      return reply.send({ accessToken, refreshToken: newRefreshToken });
     } catch (error: any) {
       fastify.log.error(error);
-      
+
       if (error.name === 'ZodError') {
         return reply.status(400).send({ error: zodErrorMessage(error) });
       }
-      
+
       return reply.status(500).send({ error: 'Token refresh failed' });
     }
   });

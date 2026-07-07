@@ -28,28 +28,31 @@ export default async function blockRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({ error: 'User already blocked' });
       }
 
-      // Create block
-      await prisma.block.create({
-        data: {
-          blockerId: request.userId!,
-          blockedId: data.blockedId,
-        },
-      });
-
-      // Unmatch if there's an active match
+      // Create the block and unmatch any active match together — previously two separate
+      // sequential writes, leaving a narrow window between them where a message or swipe from
+      // the person being blocked could still land after the Block row existed but before the
+      // match was actually marked unmatched.
       const [userA, userB] = [request.userId!, data.blockedId].sort();
-      
-      await prisma.match.updateMany({
-        where: {
-          userAId: userA,
-          userBId: userB,
-          unmatchedAt: null,
-        },
-        data: {
-          unmatchedAt: new Date(),
-          unmatchedBy: request.userId,
-        },
-      });
+
+      await prisma.$transaction([
+        prisma.block.create({
+          data: {
+            blockerId: request.userId!,
+            blockedId: data.blockedId,
+          },
+        }),
+        prisma.match.updateMany({
+          where: {
+            userAId: userA,
+            userBId: userB,
+            unmatchedAt: null,
+          },
+          data: {
+            unmatchedAt: new Date(),
+            unmatchedBy: request.userId,
+          },
+        }),
+      ]);
 
       return reply.status(201).send({ message: 'User blocked' });
     } catch (error: any) {

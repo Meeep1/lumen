@@ -38,6 +38,12 @@ class SocketManager: ObservableObject {
     private var shouldReconnect = false
     private var reconnectWorkItem: DispatchWorkItem?
     private var pingCancellable: AnyCancellable?
+    /// Clears a stuck "typing…" if the sender's own stop-typing event (3s idle timer, or
+    /// on-disappear, see ChatView) never arrives — an app crash/force-quit/connection loss while
+    /// `isTyping: true` was the last thing sent leaves nothing server-side to ever tell this
+    /// client to clear it otherwise. Keyed per userId so one person's typing indicator timing out
+    /// doesn't touch another's in a group of matches.
+    private var typingTimeoutWorkItems: [String: DispatchWorkItem] = [:]
 
     private let decoder: JSONDecoder = {
         let decoder = JSONDecoder()
@@ -177,7 +183,17 @@ class SocketManager: ObservableObject {
         case "user_typing":
             struct TypingPayload: Codable { let userId: String; let isTyping: Bool }
             guard let typing = try? decoder.decode(TypingPayload.self, from: payloadData) else { return }
-            DispatchQueue.main.async { self.typingUsers[typing.userId] = typing.isTyping }
+            DispatchQueue.main.async {
+                self.typingUsers[typing.userId] = typing.isTyping
+                self.typingTimeoutWorkItems[typing.userId]?.cancel()
+                if typing.isTyping {
+                    let workItem = DispatchWorkItem { [weak self] in
+                        self?.typingUsers[typing.userId] = false
+                    }
+                    self.typingTimeoutWorkItems[typing.userId] = workItem
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: workItem)
+                }
+            }
 
         case "messages_read":
             struct MessagesReadPayload: Codable { let matchId: String; let readBy: String }

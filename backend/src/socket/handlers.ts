@@ -181,6 +181,20 @@ export function setupSocketHandlers(fastify: FastifyInstance) {
       try {
         switch (message.type) {
           case 'send_message': {
+            // The REST equivalent (POST /matches/:matchId/messages) gets the global per-IP
+            // limiter same as every other route — this socket path had nothing at all, since
+            // @fastify/rate-limit only wraps HTTP routes. A fixed 60s window, counted per user
+            // (not per IP, so it can't be dodged by reconnecting) — generous for genuine rapid
+            // back-and-forth, a real ceiling against spamming a match.
+            const messageCount = await redis.incr(`ratelimit:socket_message:${currentUserId}`);
+            if (messageCount === 1) {
+              await redis.expire(`ratelimit:socket_message:${currentUserId}`, 60);
+            }
+            if (messageCount > 30) {
+              send(socket, 'error', { message: 'Sending messages too fast. Please slow down.' });
+              return;
+            }
+
             const { matchId, content, imageUrl } = message.payload as {
               matchId: string;
               content?: string;

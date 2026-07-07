@@ -122,8 +122,10 @@ export default async function reportRoutes(fastify: FastifyInstance) {
         },
       });
 
-      // Take action on reported user
-      if (action === 'temporary_suspension' && suspensionDays) {
+      // Take action on reported user — reportedId is nullable (see schema.prisma's Report
+      // comment: it's SetNull'd, not cascaded, if that account was since deleted), so there may
+      // be no one left to actually suspend.
+      if (report.reportedId && action === 'temporary_suspension' && suspensionDays) {
         const suspendedUntil = new Date();
         suspendedUntil.setDate(suspendedUntil.getDate() + suspensionDays);
 
@@ -135,7 +137,7 @@ export default async function reportRoutes(fastify: FastifyInstance) {
             suspensionReason: `Reported for: ${report.reason}`,
           },
         });
-      } else if (action === 'permanent_suspension') {
+      } else if (report.reportedId && action === 'permanent_suspension') {
         await prisma.user.update({
           where: { id: report.reportedId },
           data: {
@@ -151,25 +153,28 @@ export default async function reportRoutes(fastify: FastifyInstance) {
       // action (if any) was taken against the reported user, since that's private to them; this
       // is purely "we looked at this," matching the same no-preference-toggle pattern as photo
       // moderation outcomes (photo_reviewed/photo_appeal_reviewed in socket/handlers.ts) rather
-      // than a spammy per-report-detail notification.
-      const isReporterOnline = await redis.get(`user:${report.reporterId}:online`);
-      if (isReporterOnline) {
-        sendToUser(report.reporterId, 'report_reviewed', { reportId });
-      } else {
-        const reporter = await prisma.user.findUnique({
-          where: { id: report.reporterId },
-          select: { pushToken: true },
-        });
-        if (reporter?.pushToken) {
-          const result = await sendPushNotification(reporter.pushToken, {
-            title: 'Report Reviewed',
-            body: "Thanks for reporting. Our team has reviewed it and taken appropriate action.",
+      // than a spammy per-report-detail notification. Skipped entirely if the reporter's own
+      // account is gone (reporterId nulled out) — there's no one to notify.
+      if (report.reporterId) {
+        const isReporterOnline = await redis.get(`user:${report.reporterId}:online`);
+        if (isReporterOnline) {
+          sendToUser(report.reporterId, 'report_reviewed', { reportId });
+        } else {
+          const reporter = await prisma.user.findUnique({
+            where: { id: report.reporterId },
+            select: { pushToken: true },
           });
-          if (!result.ok && result.reason === 'invalid-token') {
-            await prisma.user.update({
-              where: { id: report.reporterId },
-              data: { pushToken: null, pushPlatform: null },
+          if (reporter?.pushToken) {
+            const result = await sendPushNotification(reporter.pushToken, {
+              title: 'Report Reviewed',
+              body: "Thanks for reporting. Our team has reviewed it and taken appropriate action.",
             });
+            if (!result.ok && result.reason === 'invalid-token') {
+              await prisma.user.update({
+                where: { id: report.reporterId },
+                data: { pushToken: null, pushPlatform: null },
+              });
+            }
           }
         }
       }

@@ -70,7 +70,11 @@ class KeychainManager {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
             kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
+            // ...ThisDeviceOnly, not plain kSecAttrAccessibleAfterFirstUnlock — the latter is
+            // included in encrypted iTunes/Finder and iCloud device backups, so a restore onto a
+            // different physical device could resume a session using tokens that were never
+            // meant to leave the original device.
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         ]
         
         let status = SecItemAdd(query as CFDictionary, nil)

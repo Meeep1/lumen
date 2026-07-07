@@ -102,7 +102,8 @@ class APIService {
         endpoint: String,
         method: String = "GET",
         body: Codable? = nil,
-        requiresAuth: Bool = true
+        requiresAuth: Bool = true,
+        retryCount: Int = 0
     ) async throws -> T {
         guard let url = URL(string: "\(baseURL)\(endpoint)") else {
             throw APIError.invalidURL
@@ -132,10 +133,13 @@ class APIService {
             }
             
             if httpResponse.statusCode == 401 {
-                // Try to refresh token
-                if try await refreshAccessToken() {
+                // Capped at one retry — refreshAccessToken() succeeding doesn't guarantee the
+                // retried call actually gets a 200 (e.g. some other auth bug, or the refreshed
+                // token itself immediately rejected), and without a depth limit that recurses
+                // into an unbounded refresh-then-retry loop.
+                if retryCount < 1, try await refreshAccessToken() {
                     // Retry the request
-                    return try await self.request(endpoint: endpoint, method: method, body: body, requiresAuth: requiresAuth)
+                    return try await self.request(endpoint: endpoint, method: method, body: body, requiresAuth: requiresAuth, retryCount: retryCount + 1)
                 } else {
                     throw APIError.unauthorized
                 }
@@ -255,8 +259,13 @@ class APIService {
         
         struct Response: Codable {
             let accessToken: String
+            // Rotated on every call now (see backend's POST /auth/refresh) — the old refresh
+            // token is deleted server-side the moment this response is sent, so it must be
+            // saved here or the *next* refresh attempt fails with a token the server no longer
+            // recognizes.
+            let refreshToken: String
         }
-        
+
         do {
             let response: Response = try await self.request(
                 endpoint: "/auth/refresh",
@@ -265,6 +274,7 @@ class APIService {
                 requiresAuth: false
             )
             KeychainManager.shared.saveAccessToken(response.accessToken)
+            KeychainManager.shared.saveRefreshToken(response.refreshToken)
             return true
         } catch {
             return false

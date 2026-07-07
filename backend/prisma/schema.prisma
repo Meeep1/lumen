@@ -134,6 +134,12 @@ model User {
   emailVerified Boolean   @default(false)
   otpCode       String?
   otpExpiresAt  DateTime?
+  // A 6-digit code is only ~1M combinations — POST /auth/verify-otp's own rate limit (10/min) is
+  // keyed per-IP (the default), so an attacker rotating source IPs faces no additional friction
+  // guessing one specific victim's code within its 10-minute window. This counts failed guesses
+  // *against this account* regardless of source IP, reset to 0 whenever a fresh OTP is issued
+  // (signup or resend) — see verify-otp's own comment for the lockout threshold.
+  otpAttempts   Int       @default(0)
 
   isSuspended      Boolean   @default(false)
   suspendedUntil   DateTime?
@@ -259,8 +265,14 @@ model Message {
 
 model Report {
   id           String       @id @default(uuid())
-  reporterId   String
-  reportedId   String
+  // Nullable with onDelete: SetNull, not Cascade — a report is moderation evidence, and either
+  // party (reporter or reported) can self-service-delete their account at any time, including
+  // after a report against them was already reviewed and actioned. Cascading would silently
+  // erase that history the moment either account left, which is a worse outcome for a
+  // safety-relevant record than for something like Feedback (same reasoning, same fix as
+  // Feedback.userId got earlier).
+  reporterId   String?
+  reportedId   String?
   reason       ReportReason
   details      String?
   status       ReportStatus @default(pending)
@@ -271,8 +283,8 @@ model Report {
   reviewedAt   DateTime?
   createdAt    DateTime     @default(now())
 
-  reporter User @relation("ReportsMade", fields: [reporterId], references: [id], onDelete: Cascade)
-  reported User @relation("ReportsReceived", fields: [reportedId], references: [id], onDelete: Cascade)
+  reporter User? @relation("ReportsMade", fields: [reporterId], references: [id], onDelete: SetNull)
+  reported User? @relation("ReportsReceived", fields: [reportedId], references: [id], onDelete: SetNull)
 }
 
 model Block {

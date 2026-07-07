@@ -75,37 +75,53 @@ export default async function swipeRoutes(fastify: FastifyInstance) {
         if (reciprocalSwipe) {
           // Create match
           const [userA, userB] = [request.userId!, data.swipedId].sort();
-          
-          match = await prisma.match.create({
-            data: {
-              userAId: userA,
-              userBId: userB,
-            },
-            include: {
-              userA: {
-                select: {
-                  id: true,
-                  genderIdentity: true,
-                  photos: {
-                    where: { moderationStatus: 'approved' },
-                    orderBy: { order: 'asc' },
-                    take: 1,
-                  },
-                },
-              },
-              userB: {
-                select: {
-                  id: true,
-                  genderIdentity: true,
-                  photos: {
-                    where: { moderationStatus: 'approved' },
-                    orderBy: { order: 'asc' },
-                    take: 1,
-                  },
+          const matchInclude = {
+            userA: {
+              select: {
+                id: true,
+                genderIdentity: true,
+                photos: {
+                  where: { moderationStatus: 'approved' as const },
+                  orderBy: { order: 'asc' as const },
+                  take: 1,
                 },
               },
             },
-          });
+            userB: {
+              select: {
+                id: true,
+                genderIdentity: true,
+                photos: {
+                  where: { moderationStatus: 'approved' as const },
+                  orderBy: { order: 'asc' as const },
+                  take: 1,
+                },
+              },
+            },
+          };
+
+          try {
+            match = await prisma.match.create({
+              data: { userAId: userA, userBId: userB },
+              include: matchInclude,
+            });
+          } catch (error: any) {
+            // P2002 = unique constraint violation on [userAId, userBId] — both sides of a
+            // mutual "like" can reach here within the same short window (each request already
+            // sees the other's Swipe row by the time it checks for a reciprocal above), so the
+            // second request's own match.create() collides with the row the first one already
+            // made. That's not really a failure — this swipe still resulted in a real match —
+            // so look up the row the other request created instead of 500ing and leaving this
+            // user thinking their swipe silently failed.
+            if (error.code === 'P2002') {
+              match = await prisma.match.findUnique({
+                where: { userAId_userBId: { userAId: userA, userBId: userB } },
+                include: matchInclude,
+              });
+            } else {
+              throw error;
+            }
+          }
         }
       }
 
@@ -202,10 +218,22 @@ export default async function swipeRoutes(fastify: FastifyInstance) {
         },
       });
 
+      // A block only stops *future* swipes/messages (see discovery.ts, swipe.ts's POST /) — it
+      // never touched a Swipe row a blocked user had already created before the block happened,
+      // so without this exclusion someone you blocked kept showing up here indefinitely with
+      // their full profile still visible, the exact surface blocking is supposed to close.
+      const blocks = await prisma.block.findMany({
+        where: { OR: [{ blockerId: request.userId }, { blockedId: request.userId }] },
+        select: { blockerId: true, blockedId: true },
+      });
+      const blockedUserIds = new Set(blocks.flatMap((b) => [b.blockerId, b.blockedId]));
+      blockedUserIds.delete(request.userId!);
+
       const likesReceived = await prisma.swipe.findMany({
         where: {
           swipedId: request.userId,
           direction: { in: ['like', 'super_like'] },
+          swiperId: { notIn: [...blockedUserIds] },
           // Seed profiles' pre-seeded likes (see testAccount.ts's resetTestAccount) and the
           // reviewer account itself exist only so the isTestAccount reviewer's Likes You is
           // never empty — every other real user should never see either mixed in with real likes.

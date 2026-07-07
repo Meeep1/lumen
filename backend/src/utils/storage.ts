@@ -131,6 +131,24 @@ export async function deletePhoto(key: string): Promise<void> {
 /// themselves were never cleaned up, so they stayed fetchable forever at their old
 /// `/uploads/...` URL (no ownership check on that static route) even after the account claiming
 /// to delete them was long gone. Safe to call even if a user never uploaded anything.
+/// Removes the on-disk `chat/{matchId}/` image directory for every match a deleted account was
+/// part of. `deleteAllUserPhotos` above only ever covered `photos/{userId}` and
+/// `verification/{userId}` — chat images live under a *match* id, not a user id (see
+/// uploadChatImage's own comment), so they were never touched by account deletion at all and
+/// stayed fetchable forever at their old `/uploads/...` URL even after both participants' Match/
+/// Message rows were long gone (cascade-deleted the same as the rest of a deleted user's data).
+/// Callers must collect these match ids *before* deleting the user — the Match rows themselves
+/// cascade away with the account, so there's nothing left to query afterward.
+export function deleteChatImagesForMatches(matchIds: string[]): void {
+  for (const matchId of matchIds) {
+    const matchDir = path.join(UPLOADS_DIR, 'chat', matchId);
+    if (fs.existsSync(matchDir)) {
+      fs.rmSync(matchDir, { recursive: true, force: true });
+      console.log(`🗑️  Removed chat image directory for match ${matchId}`);
+    }
+  }
+}
+
 export function deleteAllUserPhotos(userId: string): void {
   for (const kind of ['photos', 'verification']) {
     const userDir = path.join(UPLOADS_DIR, kind, userId);

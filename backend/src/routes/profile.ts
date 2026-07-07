@@ -356,6 +356,16 @@ export default async function profileRoutes(fastify: FastifyInstance) {
         return reply.status(403).send({ error: 'Unauthorized' });
       }
 
+      // The iOS client already refuses to remove a user's last photo client-side (see
+      // ManagePhotosView.swift) — but that's only ever enforced in that one screen, and this
+      // route has no equivalent guard, so calling it directly (or any other future call site)
+      // could leave a profile with zero photos, which needsOnboarding treats as "hasn't finished
+      // onboarding," bouncing a real user back into onboarding unexpectedly.
+      const photoCount = await prisma.photo.count({ where: { userId: request.userId } });
+      if (photoCount <= 1) {
+        return reply.status(400).send({ error: 'You need at least one photo. Add a replacement before removing this one.' });
+      }
+
       // Delete from S3
       await deletePhoto(photo.url);
       if (photo.thumbnailUrl) await deletePhoto(photo.thumbnailUrl);

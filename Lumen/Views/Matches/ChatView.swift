@@ -208,9 +208,19 @@ struct ChatView: View {
         }
         .task {
             await loadMessages()
-            
+
             // Mark messages as read
             socketManager.markMessagesAsRead(matchId: match.matchId)
+        }
+        // A message sent by the other participant while the socket was dropped (backgrounding,
+        // a network blip) still reaches them eventually via push, but this open chat screen had
+        // no way to ever pick it up short of leaving and re-entering — nothing re-synced history
+        // on reconnect. Re-fetching on every reconnect (not just the very first connect) folds
+        // in whatever arrived during the gap.
+        .onChange(of: socketManager.isConnected) { _, isConnected in
+            if isConnected {
+                Task { await loadMessages() }
+            }
         }
         .onReceive(socketManager.$incomingMessages) { newMessages in
             // Add new messages from socket

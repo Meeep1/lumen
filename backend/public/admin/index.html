@@ -1381,9 +1381,9 @@ function renderReports(data) {
       <div class="report-top">
         <div>
           <span class="reason-badge">${REASON_LABELS[r.reason] || r.reason}</span>
-          <div class="who"><b>Reported:</b> ${escapeHtml(r.reported?.email || r.reportedId)}
+          <div class="who"><b>Reported:</b> ${escapeHtml(r.reported?.email || r.reportedId || 'account deleted')}
             ${r.reported?.isSuspended ? ' · <b style="color:var(--danger)">suspended</b>' : ''}</div>
-          <div class="who"><b>Reporter:</b> ${escapeHtml(r.reporter?.email || r.reporterId)}</div>
+          <div class="who"><b>Reporter:</b> ${escapeHtml(r.reporter?.email || r.reporterId || 'account deleted')}</div>
         </div>
         <span class="status-badge status-${r.status}">${r.status}</span>
       </div>
@@ -1393,8 +1393,8 @@ function renderReports(data) {
         ${r.actionTaken ? ` · Action taken: ${r.actionTaken}` : ''}
       </div>
       <div style="margin-top:12px; display:flex; gap:8px">
-        <button class="ghost" onclick="openProfileModal('${r.reportedId}', '${r.reporterId}')">View profile &amp; chat</button>
-        ${r.status !== 'actioned' ? `
+        ${r.reportedId ? `<button class="ghost" onclick="openProfileModal('${r.reportedId}', '${r.reporterId || ''}')">View profile &amp; chat</button>` : ''}
+        ${r.status !== 'actioned' && r.reportedId ? `
           <button class="primary" onclick="openActionModal('${r.id}', '${escapeAttr(r.reported?.email || '')}')">Take action</button>
         ` : ''}
       </div>
