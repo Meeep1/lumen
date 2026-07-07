@@ -5,15 +5,26 @@ struct LumenApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var authManager = AuthenticationManager.shared
     @StateObject private var socketManager = SocketManager.shared
+    /// Latches true the moment onboarding is first shown, independent of `user.needsOnboarding`
+    /// re-evaluating in the meantime. `needsOnboarding` is a live, data-driven check (has a
+    /// location + a photo) — but `currentUser` can legitimately reload mid-onboarding (e.g. the
+    /// first photo finishing moderation posts .photoReviewed, which reloads the profile to
+    /// refresh its status), and the instant that reload lands, `needsOnboarding` can already read
+    /// false even though the user is still on, say, the "About" step. Without this latch that
+    /// reload alone would swap the whole root view straight to MainTabView, silently skipping
+    /// everything after whichever step they were on. Only OnboardingView's own completion (via
+    /// onFinish below) clears it, so the manual Skip/Continue buttons remain the only way out.
+    @State private var isOnboarding = false
 
     var body: some Scene {
         WindowGroup {
             Group {
                 if authManager.isAuthenticated {
                     if let user = authManager.currentUser {
-                        if user.needsOnboarding {
-                            OnboardingView()
+                        if isOnboarding || user.needsOnboarding {
+                            OnboardingView(onFinish: { isOnboarding = false })
                                 .environmentObject(authManager)
+                                .onAppear { isOnboarding = true }
                         } else {
                             MainTabView()
                                 .environmentObject(authManager)

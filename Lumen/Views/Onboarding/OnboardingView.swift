@@ -5,6 +5,7 @@ import SwiftUI
 /// later from Settings.
 struct OnboardingView: View {
     @EnvironmentObject var authManager: AuthenticationManager
+    var onFinish: () -> Void = {}
 
     private enum Step: Int, CaseIterable {
         case location, photo, about, height, details, prompts, tags
@@ -87,6 +88,7 @@ struct OnboardingView: View {
         Task {
             await APIService.shared.logOnboardingStep("completed")
             await authManager.loadCurrentUser()
+            onFinish()
         }
     }
 }
