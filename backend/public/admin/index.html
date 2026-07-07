@@ -15,9 +15,18 @@
     --card: #ffffff;
     --warn: #c8781f;
     --danger: #c8353f;
+    --good: #2c8a45;
     --shadow: 0 1px 2px rgba(26,20,24,0.04), 0 8px 24px -12px rgba(26,20,24,0.12);
   }
   * { box-sizing: border-box; }
+  code {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.9em;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+  }
   body {
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
@@ -400,6 +409,130 @@
     transition: width 0.3s ease;
   }
   .funnel-pct { width: 60px; flex-shrink: 0; text-align: right; font-size: 12px; color: var(--muted); }
+
+  /* --- Moderation thresholds guide --- */
+  .threshold-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 22px 18px;
+    box-shadow: var(--shadow);
+    margin-bottom: 20px;
+  }
+  .threshold-card h3 { margin: 0 0 4px; font-size: 15px; }
+  .threshold-card .lede {
+    font-size: 12.5px;
+    color: var(--muted);
+    margin: 0 0 20px;
+    max-width: 70ch;
+    line-height: 1.5;
+  }
+  .threshold-block { margin-bottom: 26px; }
+  .threshold-block:last-child { margin-bottom: 4px; }
+  .threshold-label {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .threshold-title { font-size: 13px; font-weight: 700; color: var(--ink); }
+  .threshold-note { font-size: 11.5px; color: var(--muted); }
+  .threshold-track {
+    position: relative;
+    height: 22px;
+    border-radius: 4px;
+    display: flex;
+  }
+  .threshold-zone { height: 100%; position: relative; }
+  .threshold-zone:first-child { border-radius: 4px 0 0 4px; }
+  .threshold-zone:last-child { border-radius: 0 4px 4px 0; }
+  .threshold-zone + .threshold-zone::before {
+    content: "";
+    position: absolute;
+    left: -2px; top: 0; bottom: 0;
+    width: 2px;
+    background: var(--card);
+  }
+  .threshold-zone.approved { background: var(--good); }
+  .threshold-zone.pending { background: var(--warn); }
+  .threshold-zone.rejected { background: var(--danger); }
+  .threshold-zone-label {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 10.5px;
+    font-weight: 700;
+    color: white;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .threshold-ticks { position: relative; height: 22px; margin-top: 2px; }
+  .threshold-tick {
+    position: absolute;
+    top: 0;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+  }
+  .threshold-tick .stem { width: 1px; height: 5px; background: var(--border); }
+  .threshold-tick .pct {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .threshold-callout {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 12px 14px;
+    background: #fdf1de;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin: 18px 0 0;
+  }
+  .threshold-callout .dot {
+    width: 7px; height: 7px;
+    border-radius: 999px;
+    background: var(--warn);
+    flex-shrink: 0;
+    margin-top: 5px;
+  }
+  .threshold-callout p { margin: 0; font-size: 12px; line-height: 1.5; color: var(--ink); }
+  .threshold-legend {
+    display: flex; gap: 18px; flex-wrap: wrap;
+    margin-top: 18px; padding-top: 14px;
+    border-top: 1px solid var(--border);
+  }
+  .threshold-legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .threshold-legend-swatch { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
+  .threshold-legend-swatch.approved { background: var(--good); }
+  .threshold-legend-swatch.pending { background: var(--warn); }
+  .threshold-legend-swatch.rejected { background: var(--danger); }
+
+  .score-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .score-table th {
+    text-align: left;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    font-weight: 700;
+    padding: 0 10px 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .score-table td {
+    padding: 10px 10px 10px 0;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+    color: var(--ink);
+    line-height: 1.5;
+  }
+  .score-table tr:last-child td { border-bottom: none; }
+  .score-table .score-name { font-weight: 700; white-space: nowrap; }
+  .score-table td.score-role { color: var(--muted); }
 </style>
 </head>
 <body>
@@ -430,6 +563,7 @@
         <button data-section="verification" data-permission="verification"><span class="nav-icon">✅</span> Verification</button>
         <button data-section="photos" data-permission="moderation"><span class="nav-icon">🖼️</span> Photos</button>
         <button data-section="appeals" data-permission="moderation"><span class="nav-icon">🔁</span> Appeals</button>
+        <button data-section="thresholds" data-permission="moderation"><span class="nav-icon">📊</span> Thresholds</button>
         <button data-section="test-tools" data-permission="testTools"><span class="nav-icon">🧪</span> Test Tools</button>
         <button data-section="analytics" data-permission="analytics"><span class="nav-icon">📈</span> Analytics</button>
         <button data-section="team" data-permission="__superAdmin"><span class="nav-icon">👥</span> Team</button>
@@ -478,6 +612,109 @@
         <button id="appealsRefreshBtn" class="ghost" style="margin-left:auto">Refresh</button>
       </div>
       <div id="appealsGrid" class="mod-grid"></div>
+    </div>
+
+    <div id="thresholdsSection" class="hidden">
+      <div class="threshold-card">
+        <h3>How a photo gets routed</h3>
+        <p class="lede">
+          Every uploaded photo is scored by the classifier, then routed by these
+          cutoffs in <code>storage.ts</code>'s <code>moderateImage()</code>. The
+          score below is Porn + Hentai probability combined, out of 100%.
+        </p>
+
+        <div class="threshold-block">
+          <div class="threshold-label">
+            <span class="threshold-title">Real photos</span>
+            <span class="threshold-note">most uploads</span>
+          </div>
+          <div class="threshold-track">
+            <div class="threshold-zone approved" style="width:5%"></div><div class="threshold-zone pending" style="width:70%"><span class="threshold-zone-label">PENDING REVIEW</span></div><div class="threshold-zone rejected" style="width:25%"><span class="threshold-zone-label">REJECTED</span></div>
+          </div>
+          <div class="threshold-ticks">
+            <div class="threshold-tick" style="left:0%"><div class="stem"></div><div class="pct">0%</div></div>
+            <div class="threshold-tick" style="left:5%"><div class="stem"></div><div class="pct">5%</div></div>
+            <div class="threshold-tick" style="left:75%"><div class="stem"></div><div class="pct">75%</div></div>
+            <div class="threshold-tick" style="left:100%"><div class="stem"></div><div class="pct">100%</div></div>
+          </div>
+        </div>
+
+        <div class="threshold-block">
+          <div class="threshold-label">
+            <span class="threshold-title">Looks like a drawing or art</span>
+            <span class="threshold-note">Drawing score &ge; 15%, never auto-rejected</span>
+          </div>
+          <div class="threshold-track">
+            <div class="threshold-zone approved" style="width:35%"></div><div class="threshold-zone pending" style="width:65%"><span class="threshold-zone-label">PENDING REVIEW</span></div>
+          </div>
+          <div class="threshold-ticks">
+            <div class="threshold-tick" style="left:0%"><div class="stem"></div><div class="pct">0%</div></div>
+            <div class="threshold-tick" style="left:35%"><div class="stem"></div><div class="pct">35%</div></div>
+            <div class="threshold-tick" style="left:100%"><div class="stem"></div><div class="pct">100%</div></div>
+          </div>
+        </div>
+
+        <div class="threshold-callout">
+          <div class="dot"></div>
+          <p>
+            <strong>Also queued for review regardless of the above:</strong> any
+            photo whose Sexy score alone is <strong>&ge; 50%</strong>, a
+            separate measure from the explicit score, so it's not on either
+            track above.
+          </p>
+        </div>
+
+        <div class="threshold-legend">
+          <div class="threshold-legend-item"><span class="threshold-legend-swatch approved"></span>Approved instantly</div>
+          <div class="threshold-legend-item"><span class="threshold-legend-swatch pending"></span>Queued for human review</div>
+          <div class="threshold-legend-item"><span class="threshold-legend-swatch rejected"></span>Rejected outright, no human sees it</div>
+        </div>
+      </div>
+
+      <div class="threshold-card">
+        <h3>Every score the classifier reports</h3>
+        <p class="lede">
+          The labels shown on a photo in the Photos and Appeals tabs (e.g. "Porn
+          (34%)") come from these five classes. They always sum to roughly 100%
+          across one photo.
+        </p>
+        <table class="score-table">
+          <thead>
+            <tr><th>Class</th><th>What it means</th><th>Role in the decision</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="score-name">Porn</td>
+              <td class="score-role">Explicit real-photo content.</td>
+              <td class="score-role">Combines with Hentai into the "explicit score" that drives reject/pending on the Real photos track.</td>
+            </tr>
+            <tr>
+              <td class="score-name">Hentai</td>
+              <td class="score-role">Explicit illustrated/anime content.</td>
+              <td class="score-role">Combines with Porn into the same explicit score. Also the main reason a photo counts as "looks like a drawing."</td>
+            </tr>
+            <tr>
+              <td class="score-name">Sexy</td>
+              <td class="score-role">Suggestive but not explicit: swimwear, lingerie, workout clothes.</td>
+              <td class="score-role">&ge; 50% alone queues the photo for review, independent of the explicit score.</td>
+            </tr>
+            <tr>
+              <td class="score-name">Drawing</td>
+              <td class="score-role">Illustration/art signal, not necessarily explicit.</td>
+              <td class="score-role">&ge; 15% switches the photo onto the "looks like a drawing" track: a much higher pending bar (35%), and outright rejection is never allowed.</td>
+            </tr>
+            <tr>
+              <td class="score-name">Neutral</td>
+              <td class="score-role">Everything else.</td>
+              <td class="score-role">No threshold of its own. It's just whatever probability the other four didn't claim.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p style="font-size:11.5px;color:var(--muted);margin:0">
+        All five thresholds are tunable via env vars (<code>MODERATION_*_SCORE</code>) without a code change.
+      </p>
     </div>
 
     <div id="testToolsSection" class="hidden">
@@ -559,6 +796,7 @@ const els = {
   appealsGrid: document.getElementById('appealsGrid'),
   appealsRefreshBtn: document.getElementById('appealsRefreshBtn'),
   appealsTabs: document.querySelectorAll('.tabs button[data-astatus]'),
+  thresholdsSection: document.getElementById('thresholdsSection'),
   testToolsSection: document.getElementById('testToolsSection'),
   testFromAccount: document.getElementById('testFromAccount'),
   testToEmail: document.getElementById('testToEmail'),
@@ -698,6 +936,7 @@ els.sectionNav.forEach((btn) => {
     els.verificationSection.classList.toggle('hidden', section !== 'verification');
     els.photosSection.classList.toggle('hidden', section !== 'photos');
     els.appealsSection.classList.toggle('hidden', section !== 'appeals');
+    els.thresholdsSection.classList.toggle('hidden', section !== 'thresholds');
     els.testToolsSection.classList.toggle('hidden', section !== 'test-tools');
     els.analyticsSection.classList.toggle('hidden', section !== 'analytics');
     els.teamSection.classList.toggle('hidden', section !== 'team');
