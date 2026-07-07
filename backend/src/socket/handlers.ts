@@ -106,11 +106,41 @@ function subscribeToPhotoModerationEvents() {
     if (channel !== 'photo-reviewed') return;
     try {
       const { userId, photoId, status } = JSON.parse(message);
-      sendToUser(userId, 'photo_reviewed', { photoId, status });
+      void notifyPhotoReviewed(userId, photoId, status);
     } catch (err) {
       console.error('Failed to handle photo-reviewed message:', err);
     }
   });
+}
+
+/// `sendToUser` alone (this function's previous body) only ever reaches a client with an
+/// actively-open socket — silently dropped otherwise, with no push fallback at all, unlike every
+/// other notification kind in this app (new match, new like, new message, report reviewed). That
+/// meant a photo being approved or rejected while someone's phone was locked/backgrounded (the
+/// common case — moderation now finishes in ~1s, well before most people are still staring at
+/// the upload screen) never actually reached them. Mirrors report.ts's report_reviewed handling:
+/// live socket event if online, a real APNs push if not.
+async function notifyPhotoReviewed(userId: string, photoId: string, status: string) {
+  const isOnline = await redis.get(`user:${userId}:online`);
+  if (isOnline) {
+    sendToUser(userId, 'photo_reviewed', { photoId, status });
+    return;
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { pushToken: true } });
+  if (!user?.pushToken) return;
+
+  const result = await sendPushNotification(user.pushToken, {
+    title: status === 'approved' ? 'Photo Approved' : 'Photo Not Approved',
+    body:
+      status === 'approved'
+        ? 'One of your photos is now live on your profile.'
+        : "One of your photos wasn't approved. Check Manage Photos for details.",
+    data: { photoId, status },
+  });
+  if (!result.ok && result.reason === 'invalid-token') {
+    await prisma.user.update({ where: { id: userId }, data: { pushToken: null, pushPlatform: null } });
+  }
 }
 
 export function setupSocketHandlers(fastify: FastifyInstance) {
