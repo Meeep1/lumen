@@ -164,9 +164,12 @@ export function preloadModerationModel(): ReturnType<typeof nsfwjs.load> {
 ///     place.
 /// Still only a handful of confirmed real data points — treat this as a working hypothesis that
 /// improves as the admin Photos queue collects more, not a solved problem.
-/// Sexy stayed conservative (0.5) since it tends to fire on plainly benign photos (swimwear,
-/// workout clothes) more readily than Porn/Hentai do, and no confirmed bad example so far has
-/// needed it to catch anything Porn+Hentai didn't already.
+/// Sexy raised from 0.5 to 0.8 (product decision: suggestive-but-not-explicit content, swimwear,
+/// lingerie, workout clothes, is fine on its own and shouldn't cost someone a review-queue delay)
+/// — it already fired on plenty of plainly benign photos more readily than Porn/Hentai did, and
+/// no confirmed bad example so far has needed it to catch anything Porn+Hentai didn't already.
+/// Kept as a high bar rather than removed outright, so something scoring overwhelmingly Sexy
+/// still gets a human look.
 export async function moderateImage(imageBytes: Buffer): Promise<{
   status: ModerationDecision;
   labels: string[];
@@ -208,7 +211,7 @@ export async function moderateImage(imageBytes: Buffer): Promise<{
 
   const rejectThreshold = parseFloat(process.env.MODERATION_REJECT_SCORE || '0.75');
   const pendingThreshold = parseFloat(process.env.MODERATION_PENDING_SCORE || '0.05');
-  const sexyPendingThreshold = parseFloat(process.env.MODERATION_SEXY_PENDING_SCORE || '0.5');
+  const sexyPendingThreshold = parseFloat(process.env.MODERATION_SEXY_PENDING_SCORE || '0.8');
   const drawingLeewayThreshold = parseFloat(process.env.MODERATION_DRAWING_LEEWAY_SCORE || '0.15');
   // Only applies once looksLikeDrawing is true (see below) — real photos still use the much
   // more aggressive pendingThreshold above unchanged.
