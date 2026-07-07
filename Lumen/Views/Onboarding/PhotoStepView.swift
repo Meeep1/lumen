@@ -6,6 +6,7 @@ struct PhotoStepView: View {
 
     @State private var pickerItem: PhotosPickerItem?
     @State private var previewImage: Image?
+    @State private var imageToCrop: UIImage?
     @State private var isUploading = false
     @State private var uploadedPhoto: Photo?
     @State private var errorMessage: String?
@@ -92,6 +93,14 @@ struct PhotoStepView: View {
         .onChange(of: pickerItem) { _, newItem in
             Task { await load(newItem) }
         }
+        .sheet(item: Binding(
+            get: { imageToCrop.map { IdentifiableImage(image: $0) } },
+            set: { imageToCrop = $0?.image }
+        )) { wrapped in
+            PhotoCropView(image: wrapped.image) { cropped in
+                Task { await upload(cropped) }
+            }
+        }
     }
 
     private func load(_ item: PhotosPickerItem?) async {
@@ -104,13 +113,18 @@ struct PhotoStepView: View {
             return
         }
 
-        previewImage = Image(uiImage: uiImage)
+        imageToCrop = uiImage
+    }
 
-        guard let jpegData = uiImage.jpegData(compressionQuality: 0.85) else {
+    private func upload(_ image: UIImage) async {
+        previewImage = Image(uiImage: image)
+
+        guard let jpegData = image.jpegData(compressionQuality: 0.85) else {
             errorMessage = "Couldn't process that photo. Try another one."
             return
         }
 
+        errorMessage = nil
         isUploading = true
         defer { isUploading = false }
 
@@ -120,6 +134,11 @@ struct PhotoStepView: View {
             errorMessage = error.localizedDescription
         }
     }
+}
+
+private struct IdentifiableImage: Identifiable {
+    let id = UUID()
+    let image: UIImage
 }
 
 #Preview {
