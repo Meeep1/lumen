@@ -173,7 +173,20 @@ export async function moderateImage(imageBytes: Buffer): Promise<{
 }> {
   const model = await preloadModerationModel();
 
+  // nsfwjs's own classify() resizes whatever tensor shape it's given down to a fixed 224x224
+  // (see its core.js: `tf.image.resizeBilinear(normalized, [size, size])`, stretching rather than
+  // cropping) before running the model — so building a tensor from the image at its *original*
+  // resolution was pure waste, held in memory just long enough to immediately get thrown away.
+  // For a real phone photo (e.g. 3024x4032) that's tens of megabytes of raw pixels and, worse, a
+  // same-shape int32 tensor 4x that size again, on a droplet with under 2GB of RAM total — a
+  // large enough upload could balloon this single classification past what the box had free and
+  // get the whole worker process killed mid-job, which is exactly what was happening to real
+  // stuck-in-pending photos. Resizing to the model's own 224x224 here first, with the same
+  // stretch-not-crop semantics nsfwjs's internal resize already uses, means its `shape[0] !==
+  // size` check finds an exact match and skips its own resize entirely — identical
+  // classification result, at a small fraction of the memory.
   const { data, info } = await sharp(imageBytes)
+    .resize(224, 224, { fit: 'fill' })
     .removeAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true });
