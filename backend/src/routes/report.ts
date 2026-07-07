@@ -163,7 +163,7 @@ export default async function reportRoutes(fastify: FastifyInstance) {
         if (reporter?.pushToken) {
           const result = await sendPushNotification(reporter.pushToken, {
             title: 'Report Reviewed',
-            body: "Thanks for reporting — our team has reviewed it and taken appropriate action.",
+            body: "Thanks for reporting. Our team has reviewed it and taken appropriate action.",
           });
           if (!result.ok && result.reason === 'invalid-token') {
             await prisma.user.update({

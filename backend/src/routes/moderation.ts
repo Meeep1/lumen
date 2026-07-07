@@ -184,7 +184,7 @@ export default async function moderationRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         queued: photos.length,
-        message: `Queued ${photos.length} photo${photos.length === 1 ? '' : 's'} for rescanning — check the Pending/Rejected tabs shortly as the worker processes them.`,
+        message: `Queued ${photos.length} photo${photos.length === 1 ? '' : 's'} for rescanning. Check the Pending/Rejected tabs shortly as the worker processes them.`,
       });
     } catch (error) {
       fastify.log.error(error);

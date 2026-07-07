@@ -242,7 +242,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
       }
 
       if (!user.passwordHash) {
-        return reply.status(400).send({ error: 'This account uses Sign in with Apple — there is no password to check.' });
+        return reply.status(400).send({ error: 'This account uses Sign in with Apple. There is no password to check.' });
       }
 
       const validPassword = await verifyPassword(user.passwordHash, data.password);
