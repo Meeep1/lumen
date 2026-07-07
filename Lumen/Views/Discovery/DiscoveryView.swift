@@ -215,13 +215,31 @@ struct DiscoveryView: View {
         }
     }
 
-    private func loadProfiles() async {
-        isLoading = true
-        defer { isLoading = false }
+    /// `reset` distinguishes a genuine fresh load (initial appearance, a filter change) from the
+    /// background top-up triggered mid-swipe below as the stack runs low. Both used to always
+    /// replace the whole `profiles` array and snap `currentIndex` back to 0 — harmless for a
+    /// fresh load, but the top-up fired *during* `handleSwipe`, after `currentIndex` had already
+    /// advanced past the card just swiped. Resetting it back to 0 there raced with the swipe
+    /// still in flight: the just-swiped profile's array position no longer matched `currentIndex`,
+    /// so undoing it either silently no-op'd (`currentIndex > 0` was suddenly false) or brought
+    /// back the wrong card, and the full-array replacement could yank the entire visible stack
+    /// out from under an in-progress gesture. Appending new profiles (deduped) and leaving
+    /// `currentIndex` alone keeps every already-swiped position stable.
+    private func loadProfiles(reset: Bool = true) async {
+        if reset {
+            isLoading = true
+        }
+        defer { if reset { isLoading = false } }
 
         do {
-            profiles = try await APIService.shared.getDiscoveryStack(filters: filters)
-            currentIndex = 0
+            let fetched = try await APIService.shared.getDiscoveryStack(filters: filters)
+            if reset {
+                profiles = fetched
+                currentIndex = 0
+            } else {
+                let existingIds = Set(profiles.map(\.id))
+                profiles.append(contentsOf: fetched.filter { !existingIds.contains($0.id) })
+            }
         } catch {
             print("Failed to load profiles: \(error)")
         }
@@ -240,7 +258,7 @@ struct DiscoveryView: View {
         }
 
         if currentIndex >= profiles.count - 5 {
-            await loadProfiles()
+            await loadProfiles(reset: false)
         }
 
         do {
