@@ -8,6 +8,8 @@ struct PromptsStepView: View {
     @State private var prompt1Answer = ""
     @State private var prompt2Question: PromptQuestion = .idealSunday
     @State private var prompt2Answer = ""
+    @State private var prompt3Question: PromptQuestion = .winMeOver
+    @State private var prompt3Answer = ""
     @State private var isSaving = false
     @State private var errorMessage: String?
 
@@ -23,6 +25,7 @@ struct PromptsStepView: View {
 
                 promptEditor(title: "Prompt 1", question: $prompt1Question, answer: $prompt1Answer)
                 promptEditor(title: "Prompt 2", question: $prompt2Question, answer: $prompt2Answer)
+                promptEditor(title: "Prompt 3", question: $prompt3Question, answer: $prompt3Answer)
 
                 if let errorMessage {
                     Text(errorMessage)
@@ -76,7 +79,7 @@ struct PromptsStepView: View {
     }
 
     private func save() async {
-        guard !prompt1Answer.isEmpty || !prompt2Answer.isEmpty else {
+        guard !prompt1Answer.isEmpty || !prompt2Answer.isEmpty || !prompt3Answer.isEmpty else {
             onContinue()
             return
         }
@@ -96,6 +99,8 @@ struct PromptsStepView: View {
                 prompt1Answer: prompt1Answer.isEmpty ? nil : prompt1Answer,
                 prompt2Question: prompt2Answer.isEmpty ? nil : prompt2Question.rawValue,
                 prompt2Answer: prompt2Answer.isEmpty ? nil : prompt2Answer,
+                prompt3Question: prompt3Answer.isEmpty ? nil : prompt3Question.rawValue,
+                prompt3Answer: prompt3Answer.isEmpty ? nil : prompt3Answer,
                 latitude: nil,
                 longitude: nil,
                 cityDisplay: nil,

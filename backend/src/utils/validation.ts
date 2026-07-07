@@ -82,6 +82,8 @@ export const PROMPT_QUESTIONS = [
 ] as const;
 
 export const updateProfileSchema = z.object({
+  genderIdentity: z.enum(['woman', 'femboy', 'trans_woman', 'nonbinary_feminine', 'other']).optional(),
+  genderIdentityOther: z.string().max(100).optional(),
   bio: z.string().max(500).optional(),
   pronouns: z.string().max(50).optional(),
   styleTags: z.array(z.string().max(30)).max(10).optional(),
@@ -92,6 +94,8 @@ export const updateProfileSchema = z.object({
   prompt1Answer: z.string().max(300).optional(),
   prompt2Question: z.enum(PROMPT_QUESTIONS).optional(),
   prompt2Answer: z.string().max(300).optional(),
+  prompt3Question: z.enum(PROMPT_QUESTIONS).optional(),
+  prompt3Answer: z.string().max(300).optional(),
   latitude: z.number().min(-90).max(90).optional(),
   longitude: z.number().min(-180).max(180).optional(),
   cityDisplay: z.string().max(100).optional(),

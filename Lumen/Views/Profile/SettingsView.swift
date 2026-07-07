@@ -63,11 +63,6 @@ struct SettingsView: View {
                             }
                             .buttonStyle(.plain)
                         }
-
-                        Text("When off, you won't appear in other users' discovery stack.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 4)
                     }
 
                     SettingsSection(title: "Notifications") {

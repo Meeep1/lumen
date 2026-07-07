@@ -48,6 +48,7 @@ struct ProfilePreviewView: View {
         pronouns: "she/her", styleTags: ["cottagecore", "cozy"], heightInches: 65,
         jobTitle: "Barista", school: nil, prompt1Question: "A random fact I love is...",
         prompt1Answer: "Octopi have three hearts.", prompt2Question: nil, prompt2Answer: nil,
+        prompt3Question: nil, prompt3Answer: nil,
         latitude: nil, longitude: nil, cityDisplay: "Portland, OR", isVerified: true,
         discoverable: true, notifyNewMatch: true, notifyNewMessage: true, notifyNewLike: true,
         photos: []

@@ -30,6 +30,7 @@ export async function resetTestAccount(prisma: PrismaClient, userId: string): Pr
     data: {
       bio: null, pronouns: null, styleTags: [], heightInches: null, jobTitle: null, school: null,
       prompt1Question: null, prompt1Answer: null, prompt2Question: null, prompt2Answer: null,
+      prompt3Question: null, prompt3Answer: null,
       latitude: null, longitude: null, cityDisplay: null,
       isVerified: false, verificationPhotoUrl: null, verificationStatus: 'none',
       verificationReviewedById: null, verificationReviewedAt: null,

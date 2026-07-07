@@ -1490,6 +1490,7 @@ window.openProfileModal = async function (userId, chatWithUserId) {
       ${u.school ? `<div><b>School:</b> ${escapeHtml(u.school)}</div>` : ''}
       ${u.prompt1Question ? `<div style="margin-top:8px"><b>${escapeHtml(u.prompt1Question)}</b><br>${escapeHtml(u.prompt1Answer || '')}</div>` : ''}
       ${u.prompt2Question ? `<div style="margin-top:8px"><b>${escapeHtml(u.prompt2Question)}</b><br>${escapeHtml(u.prompt2Answer || '')}</div>` : ''}
+      ${u.prompt3Question ? `<div style="margin-top:8px"><b>${escapeHtml(u.prompt3Question)}</b><br>${escapeHtml(u.prompt3Answer || '')}</div>` : ''}
       <div class="profile-photos">
         ${(u.photos || []).map((p) => `
           <div>

@@ -4,6 +4,8 @@ struct EditProfileView: View {
     @EnvironmentObject var authManager: AuthenticationManager
     @Environment(\.dismiss) var dismiss
 
+    @State private var genderIdentity: GenderIdentity = .woman
+    @State private var genderIdentityOther = ""
     @State private var bio = ""
     @State private var pronouns = ""
     @State private var styleTags: [String] = []
@@ -16,6 +18,8 @@ struct EditProfileView: View {
     @State private var prompt1Answer = ""
     @State private var prompt2Question: PromptQuestion = .idealSunday
     @State private var prompt2Answer = ""
+    @State private var prompt3Question: PromptQuestion = .winMeOver
+    @State private var prompt3Answer = ""
     @State private var isSaving = false
     @State private var showingError = false
     @State private var errorMessage = ""
@@ -43,6 +47,25 @@ struct EditProfileView: View {
                                 SettingsRow(icon: "photo.on.rectangle.angled", title: "Manage Photos")
                             }
                             .buttonStyle(.plain)
+                        }
+
+                        SettingsSection(title: "Gender Identity") {
+                            SettingsCard {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    LumenSelectField(
+                                        title: "Gender Identity",
+                                        options: GenderIdentity.allCases,
+                                        label: { $0.displayName },
+                                        selection: $genderIdentity
+                                    )
+
+                                    if genderIdentity == .other {
+                                        TextField("Please specify", text: $genderIdentityOther)
+                                            .textFieldStyle(LumenTextFieldStyle())
+                                    }
+                                }
+                                .padding(16)
+                            }
                         }
 
                         SettingsSection(title: "About") {
@@ -94,6 +117,7 @@ struct EditProfileView: View {
                             VStack(spacing: 12) {
                                 promptEditor(question: $prompt1Question, answer: $prompt1Answer)
                                 promptEditor(question: $prompt2Question, answer: $prompt2Answer)
+                                promptEditor(question: $prompt3Question, answer: $prompt3Answer)
                             }
                         }
 
@@ -172,6 +196,8 @@ struct EditProfileView: View {
     private func loadCurrentProfile() {
         guard let user = authManager.currentUser else { return }
 
+        genderIdentity = user.genderIdentity
+        genderIdentityOther = user.genderIdentityOther ?? ""
         bio = user.bio ?? ""
         pronouns = user.pronouns ?? ""
         styleTags = user.styleTags
@@ -189,6 +215,10 @@ struct EditProfileView: View {
             prompt2Question = pq
             prompt2Answer = user.prompt2Answer ?? ""
         }
+        if let q = user.prompt3Question, let pq = PromptQuestion(rawValue: q) {
+            prompt3Question = pq
+            prompt3Answer = user.prompt3Answer ?? ""
+        }
     }
 
     private func addTag() {
@@ -204,6 +234,8 @@ struct EditProfileView: View {
         defer { isSaving = false }
 
         let update = ProfileUpdate(
+            genderIdentity: genderIdentity,
+            genderIdentityOther: genderIdentity == .other ? (genderIdentityOther.isEmpty ? nil : genderIdentityOther) : nil,
             bio: bio.isEmpty ? nil : bio,
             pronouns: pronouns.isEmpty ? nil : pronouns,
             styleTags: styleTags,
@@ -214,6 +246,8 @@ struct EditProfileView: View {
             prompt1Answer: prompt1Answer.isEmpty ? nil : prompt1Answer,
             prompt2Question: prompt2Answer.isEmpty ? nil : prompt2Question.rawValue,
             prompt2Answer: prompt2Answer.isEmpty ? nil : prompt2Answer,
+            prompt3Question: prompt3Answer.isEmpty ? nil : prompt3Question.rawValue,
+            prompt3Answer: prompt3Answer.isEmpty ? nil : prompt3Answer,
             latitude: nil,
             longitude: nil,
             cityDisplay: nil,

@@ -278,7 +278,7 @@ struct LikeResponseView: View {
         id: "preview", age: 25, genderIdentity: .woman, genderIdentityOther: nil,
         bio: "Preview bio", pronouns: "she/her", styleTags: [], heightInches: nil,
         jobTitle: nil, school: nil, prompt1Question: nil, prompt1Answer: nil,
-        prompt2Question: nil, prompt2Answer: nil, cityDisplay: nil, isVerified: false,
+        prompt2Question: nil, prompt2Answer: nil, prompt3Question: nil, prompt3Answer: nil, cityDisplay: nil, isVerified: false,
         distance: 3, primaryPhoto: nil, likedPhotoUrl: nil, likedPromptQuestion: nil,
         likedPromptAnswer: nil, message: nil, likedAt: Date()
     ), onResponded: {})

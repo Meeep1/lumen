@@ -55,6 +55,8 @@ export default async function adminToolsRoutes(fastify: FastifyInstance) {
         prompt1Answer: user.prompt1Answer,
         prompt2Question: user.prompt2Question,
         prompt2Answer: user.prompt2Answer,
+        prompt3Question: user.prompt3Question,
+        prompt3Answer: user.prompt3Answer,
         cityDisplay: user.cityDisplay,
         isVerified: user.isVerified,
         isSuspended: user.isSuspended,

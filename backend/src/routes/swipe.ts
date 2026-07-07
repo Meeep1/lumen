@@ -196,6 +196,8 @@ export default async function swipeRoutes(fastify: FastifyInstance) {
           prompt1Answer: true,
           prompt2Question: true,
           prompt2Answer: true,
+          prompt3Question: true,
+          prompt3Answer: true,
           isTestAccount: true,
         },
       });
@@ -232,6 +234,8 @@ export default async function swipeRoutes(fastify: FastifyInstance) {
               prompt1Answer: true,
               prompt2Question: true,
               prompt2Answer: true,
+              prompt3Question: true,
+              prompt3Answer: true,
               cityDisplay: true,
               isVerified: true,
               dateOfBirth: true,
@@ -297,6 +301,9 @@ export default async function swipeRoutes(fastify: FastifyInstance) {
           } else if (like.likedPromptNumber === 2) {
             likedPromptQuestion = currentUser?.prompt2Question ?? null;
             likedPromptAnswer = currentUser?.prompt2Answer ?? null;
+          } else if (like.likedPromptNumber === 3) {
+            likedPromptQuestion = currentUser?.prompt3Question ?? null;
+            likedPromptAnswer = currentUser?.prompt3Answer ?? null;
           }
 
           return {
@@ -314,6 +321,8 @@ export default async function swipeRoutes(fastify: FastifyInstance) {
             prompt1Answer: like.swiper.prompt1Answer,
             prompt2Question: like.swiper.prompt2Question,
             prompt2Answer: like.swiper.prompt2Answer,
+            prompt3Question: like.swiper.prompt3Question,
+            prompt3Answer: like.swiper.prompt3Answer,
             cityDisplay: like.swiper.cityDisplay,
             isVerified: like.swiper.isVerified,
             distance,

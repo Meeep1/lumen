@@ -20,6 +20,8 @@ struct User: Codable, Identifiable {
     let prompt1Answer: String?
     let prompt2Question: String?
     let prompt2Answer: String?
+    let prompt3Question: String?
+    let prompt3Answer: String?
     let latitude: Double?
     let longitude: Double?
     let cityDisplay: String?
@@ -46,7 +48,7 @@ struct User: Codable, Identifiable {
     }
 
     var prompts: [(question: String, answer: String)] {
-        [(prompt1Question, prompt1Answer), (prompt2Question, prompt2Answer)]
+        [(prompt1Question, prompt1Answer), (prompt2Question, prompt2Answer), (prompt3Question, prompt3Answer)]
             .compactMap { q, a in
                 guard let q, let a, !a.isEmpty else { return nil }
                 return (q, a)
@@ -119,6 +121,8 @@ struct VerificationPoseResponse: Codable {
 }
 
 struct ProfileUpdate: Codable {
+    let genderIdentity: GenderIdentity?
+    let genderIdentityOther: String?
     let bio: String?
     let pronouns: String?
     let styleTags: [String]?
@@ -129,6 +133,8 @@ struct ProfileUpdate: Codable {
     let prompt1Answer: String?
     let prompt2Question: String?
     let prompt2Answer: String?
+    let prompt3Question: String?
+    let prompt3Answer: String?
     let latitude: Double?
     let longitude: Double?
     let cityDisplay: String?
@@ -138,12 +144,16 @@ struct ProfileUpdate: Codable {
     let notifyNewLike: Bool?
 
     init(
+        genderIdentity: GenderIdentity? = nil, genderIdentityOther: String? = nil,
         bio: String?, pronouns: String?, styleTags: [String]?, heightInches: Int?,
         jobTitle: String?, school: String?, prompt1Question: String?, prompt1Answer: String?,
-        prompt2Question: String?, prompt2Answer: String?, latitude: Double?, longitude: Double?,
+        prompt2Question: String?, prompt2Answer: String?, prompt3Question: String? = nil, prompt3Answer: String? = nil,
+        latitude: Double?, longitude: Double?,
         cityDisplay: String?, discoverable: Bool?,
         notifyNewMatch: Bool? = nil, notifyNewMessage: Bool? = nil, notifyNewLike: Bool? = nil
     ) {
+        self.genderIdentity = genderIdentity
+        self.genderIdentityOther = genderIdentityOther
         self.bio = bio
         self.pronouns = pronouns
         self.styleTags = styleTags
@@ -154,6 +164,8 @@ struct ProfileUpdate: Codable {
         self.prompt1Answer = prompt1Answer
         self.prompt2Question = prompt2Question
         self.prompt2Answer = prompt2Answer
+        self.prompt3Question = prompt3Question
+        self.prompt3Answer = prompt3Answer
         self.latitude = latitude
         self.longitude = longitude
         self.cityDisplay = cityDisplay
@@ -181,6 +193,8 @@ struct DiscoveryProfile: Codable, Identifiable {
     let prompt1Answer: String?
     let prompt2Question: String?
     let prompt2Answer: String?
+    let prompt3Question: String?
+    let prompt3Answer: String?
     let cityDisplay: String?
     let isVerified: Bool
     let distance: Int
@@ -193,17 +207,17 @@ struct DiscoveryProfile: Codable, Identifiable {
     }
 
     var prompts: [(question: String, answer: String)] {
-        [(prompt1Question, prompt1Answer), (prompt2Question, prompt2Answer)]
+        [(prompt1Question, prompt1Answer), (prompt2Question, prompt2Answer), (prompt3Question, prompt3Answer)]
             .compactMap { q, a in
                 guard let q, let a, !a.isEmpty else { return nil }
                 return (q, a)
             }
     }
 
-    /// Same as `prompts`, but keeps the prompt number (1 or 2) so a targeted like can reference
+    /// Same as `prompts`, but keeps the prompt number (1, 2, or 3) so a targeted like can reference
     /// which one was liked — see SwipeAction.likedPromptNumber.
     var numberedPrompts: [(number: Int, question: String, answer: String)] {
-        [(1, prompt1Question, prompt1Answer), (2, prompt2Question, prompt2Answer)]
+        [(1, prompt1Question, prompt1Answer), (2, prompt2Question, prompt2Answer), (3, prompt3Question, prompt3Answer)]
             .compactMap { number, q, a in
                 guard let q, let a, !a.isEmpty else { return nil }
                 return (number, q, a)
@@ -227,6 +241,8 @@ struct DiscoveryProfile: Codable, Identifiable {
         prompt1Answer = user.prompt1Answer
         prompt2Question = user.prompt2Question
         prompt2Answer = user.prompt2Answer
+        prompt3Question = user.prompt3Question
+        prompt3Answer = user.prompt3Answer
         cityDisplay = user.cityDisplay
         isVerified = user.isVerified
         distance = 0
@@ -295,6 +311,8 @@ struct LikeReceived: Codable, Identifiable {
     let prompt1Answer: String?
     let prompt2Question: String?
     let prompt2Answer: String?
+    let prompt3Question: String?
+    let prompt3Answer: String?
     let cityDisplay: String?
     let isVerified: Bool
     let distance: Int

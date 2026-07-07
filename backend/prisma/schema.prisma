@@ -85,6 +85,8 @@ model User {
   prompt1Answer   String?
   prompt2Question String?
   prompt2Answer   String?
+  prompt3Question String?
+  prompt3Answer   String?
 
   isVerified               Boolean             @default(false)
   verificationPhotoUrl     String?
