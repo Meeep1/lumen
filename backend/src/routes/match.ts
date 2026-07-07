@@ -246,10 +246,22 @@ export default async function matchRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({ error: 'No file uploaded' });
       }
 
-      const buffer = await data.toBuffer();
+      // @fastify/multipart's own fileSize limit throws FST_REQ_FILE_TOO_LARGE inside toBuffer()
+      // for anything over the cap (see profile.ts's POST /photos for the full explanation) —
+      // catch it here too so an oversized image gets the specific message instead of falling
+      // through to this route's generic 500.
       const maxSize = parseInt(process.env.MAX_PHOTO_SIZE_MB || '10') * 1024 * 1024;
+      let buffer: Buffer;
+      try {
+        buffer = await data.toBuffer();
+      } catch (error: any) {
+        if (error.code === 'FST_REQ_FILE_TOO_LARGE') {
+          return reply.status(400).send({ error: `Photo is too large (max ${process.env.MAX_PHOTO_SIZE_MB || '10'}MB). Try a smaller photo.` });
+        }
+        throw error;
+      }
       if (buffer.length > maxSize) {
-        return reply.status(400).send({ error: 'File too large' });
+        return reply.status(400).send({ error: `Photo is too large (max ${process.env.MAX_PHOTO_SIZE_MB || '10'}MB). Try a smaller photo.` });
       }
 
       const key = await uploadChatImage(buffer, matchId);

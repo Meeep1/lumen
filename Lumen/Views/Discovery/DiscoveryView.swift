@@ -8,9 +8,6 @@ struct DiscoveryView: View {
     @State private var currentIndex = 0
     @State private var matchedProfile: DiscoveryProfile?
     @State private var matchedMatchId: String?
-    @State private var matchTextPop = false
-    @State private var matchPhotoPop = false
-    @State private var matchRingPulse = false
     @State private var chatMatch: Match?
     @State private var showingMatchChat = false
     /// Only ever the single most recent swipe, and only set when it didn't match (the backend
@@ -66,7 +63,30 @@ struct DiscoveryView: View {
                 await loadProfiles()
             }
             .fullScreenCover(item: $matchedProfile) { profile in
-                matchCelebration(profile: profile)
+                MatchCelebrationView(
+                    photoURL: APIService.shared.imageURL(for: profile.primaryPhoto),
+                    genderIdentity: profile.genderIdentity,
+                    onSendMessage: {
+                        if let matchedMatchId {
+                            chatMatch = Match(
+                                matchId: matchedMatchId,
+                                userId: profile.id,
+                                age: profile.age,
+                                genderIdentity: profile.genderIdentity,
+                                cityDisplay: profile.cityDisplay,
+                                isVerified: profile.isVerified,
+                                photo: profile.primaryPhoto,
+                                isOnline: nil,
+                                lastActiveAt: nil,
+                                lastMessage: nil,
+                                matchedAt: Date()
+                            )
+                            showingMatchChat = true
+                        }
+                        matchedProfile = nil
+                    },
+                    onDismiss: { matchedProfile = nil }
+                )
             }
             .navigationDestination(isPresented: $showingMatchChat) {
                 if let chatMatch {
@@ -280,10 +300,30 @@ struct DiscoveryView: View {
         }
     }
 
-    private func matchCelebration(profile: DiscoveryProfile) -> some View {
+}
+
+#Preview {
+    DiscoveryView()
+        .environmentObject(AuthenticationManager.shared)
+}
+
+/// The "It's a Match!" celebration screen — shared between DiscoveryView (matching while
+/// swiping) and LikeResponseView (matching by liking someone back from Likes You), so both
+/// paths to a match land on the exact same screen rather than two hand-maintained lookalikes.
+struct MatchCelebrationView: View {
+    let photoURL: URL?
+    let genderIdentity: GenderIdentity
+    let onSendMessage: () -> Void
+    let onDismiss: () -> Void
+
+    @State private var matchTextPop = false
+    @State private var matchPhotoPop = false
+    @State private var matchRingPulse = false
+
+    var body: some View {
         ZStack {
-            // A soft radial glow behind everything reads as more of an occasion than the flat
-            // black scrim alone did, and doubles as the surface the pulsing ring animates against.
+            // A soft radial glow behind everything reads as more of an occasion than a flat
+            // black scrim alone, and doubles as the surface the pulsing ring animates against.
             RadialGradient(
                 colors: [Color.pink.opacity(0.35), Color.black.opacity(0.9)],
                 center: .center,
@@ -291,7 +331,7 @@ struct DiscoveryView: View {
                 endRadius: 320
             )
             .ignoresSafeArea()
-            .onTapGesture { dismissMatchCelebration() }
+            .onTapGesture { onDismiss() }
 
             VStack(spacing: 22) {
                 Text("It's a Match!")
@@ -307,8 +347,8 @@ struct DiscoveryView: View {
                         .scaleEffect(matchRingPulse ? 1.15 : 0.9)
                         .opacity(matchRingPulse ? 0 : 0.8)
 
-                    if let photoUrl = APIService.shared.imageURL(for: profile.primaryPhoto) {
-                        AsyncImage(url: photoUrl) { image in
+                    if let photoURL {
+                        AsyncImage(url: photoURL) { image in
                             image.resizable().aspectRatio(contentMode: .fill)
                         } placeholder: {
                             Circle().fill(Color.white.opacity(0.2))
@@ -321,39 +361,22 @@ struct DiscoveryView: View {
                     }
                 }
 
-                Text("You and \(profile.genderIdentity.displayName.lowercased()) matched. Break the ice and send the first message.")
+                Text("You and \(genderIdentity.displayName.lowercased()) matched. Break the ice and send the first message.")
                     .foregroundColor(.white.opacity(0.85))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)
 
                 VStack(spacing: 12) {
                     Button {
-                        if let matchedMatchId {
-                            chatMatch = Match(
-                                matchId: matchedMatchId,
-                                userId: profile.id,
-                                age: profile.age,
-                                genderIdentity: profile.genderIdentity,
-                                cityDisplay: profile.cityDisplay,
-                                isVerified: profile.isVerified,
-                                photo: profile.primaryPhoto,
-                                isOnline: nil,
-                                lastActiveAt: nil,
-                                lastMessage: nil,
-                                matchedAt: Date()
-                            )
-                            showingMatchChat = true
-                        }
-                        matchedProfile = nil
+                        onSendMessage()
                     } label: {
                         Label("Send a Message", systemImage: "paperplane.fill")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(LumenPrimaryButtonStyle())
-                    .disabled(matchedMatchId == nil)
 
                     Button {
-                        dismissMatchCelebration()
+                        onDismiss()
                     } label: {
                         Text("Keep Swiping")
                             .foregroundColor(.white.opacity(0.85))
@@ -375,18 +398,12 @@ struct DiscoveryView: View {
             withAnimation(.spring(response: 0.45, dampingFraction: 0.65).delay(0.1)) {
                 matchTextPop = true
             }
-            withAnimation(.easeOut(duration: 1.4).repeatForever(autoreverses: false)) {
+            // A single ripple reads as a celebratory flourish; looping it forever (the previous
+            // `.repeatForever(autoreverses: false)` here) instead reads as a stuck/broken
+            // animation the longer the screen stays open.
+            withAnimation(.easeOut(duration: 1.4)) {
                 matchRingPulse = true
             }
         }
     }
-
-    private func dismissMatchCelebration() {
-        matchedProfile = nil
-    }
-}
-
-#Preview {
-    DiscoveryView()
-        .environmentObject(AuthenticationManager.shared)
 }

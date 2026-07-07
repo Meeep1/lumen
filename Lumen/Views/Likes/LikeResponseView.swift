@@ -10,6 +10,9 @@ struct LikeResponseView: View {
     @State private var isResponding = false
     @State private var errorMessage: String?
     @State private var matched = false
+    @State private var matchedMatchId: String?
+    @State private var chatMatch: Match?
+    @State private var showingMatchChat = false
 
     var body: some View {
         NavigationStack {
@@ -89,7 +92,39 @@ struct LikeResponseView: View {
             .toolbar(.hidden, for: .navigationBar)
             .overlay {
                 if matched {
-                    matchOverlay
+                    MatchCelebrationView(
+                        photoURL: APIService.shared.imageURL(for: like.primaryPhoto),
+                        genderIdentity: like.genderIdentity,
+                        onSendMessage: {
+                            if let matchedMatchId {
+                                chatMatch = Match(
+                                    matchId: matchedMatchId,
+                                    userId: like.id,
+                                    age: like.age,
+                                    genderIdentity: like.genderIdentity,
+                                    cityDisplay: like.cityDisplay,
+                                    isVerified: like.isVerified,
+                                    photo: like.primaryPhoto,
+                                    isOnline: nil,
+                                    lastActiveAt: nil,
+                                    lastMessage: nil,
+                                    matchedAt: Date()
+                                )
+                                matched = false
+                                showingMatchChat = true
+                            } else {
+                                dismiss()
+                            }
+                        },
+                        onDismiss: {
+                            dismiss()
+                        }
+                    )
+                }
+            }
+            .navigationDestination(isPresented: $showingMatchChat) {
+                if let chatMatch {
+                    ChatView(match: chatMatch)
                 }
             }
         }
@@ -228,26 +263,6 @@ struct LikeResponseView: View {
         .background(Color.lumenBackground)
     }
 
-    private var matchOverlay: some View {
-        ZStack {
-            Color.black.opacity(0.8).ignoresSafeArea()
-            VStack(spacing: 16) {
-                Text("It's a Match!")
-                    .font(.system(size: 32, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
-                Text("Say hi from the Matches tab.")
-                    .foregroundColor(.white.opacity(0.85))
-                Button("Done") {
-                    onResponded()
-                    dismiss()
-                }
-                .buttonStyle(LumenPrimaryButtonStyle())
-                .padding(.horizontal, 40)
-                .padding(.top, 8)
-            }
-        }
-    }
-
     private func respond(_ direction: SwipeDirection) async {
         isResponding = true
         errorMessage = nil
@@ -262,7 +277,12 @@ struct LikeResponseView: View {
                 message: nil
             ))
             if result.matched {
+                matchedMatchId = result.matchId
                 matched = true
+                // The like is already consumed server-side the moment this fires — refresh the
+                // underlying Likes You list now rather than waiting for the celebration screen
+                // to be dismissed, so it's not stale if the user navigates to chat instead.
+                onResponded()
             } else {
                 onResponded()
                 dismiss()

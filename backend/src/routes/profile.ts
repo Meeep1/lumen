@@ -271,12 +271,28 @@ export default async function profileRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({ error: 'No file uploaded' });
       }
 
-      const buffer = await data.toBuffer();
-      
-      // Check file size (max 10MB)
+      // @fastify/multipart's fileSize limit (registered in server.ts from this same env var)
+      // throws FST_REQ_FILE_TOO_LARGE right here, inside toBuffer(), for anything over the cap
+      // — it never reaches the manual buffer.length check below. Left uncaught, that exception
+      // fell through to this route's generic catch and came back as an opaque 500 "Failed to
+      // upload photo", which is exactly what a modern phone's higher-resolution shots (a 48MP
+      // photo can still clear 10MB even after client-side JPEG re-encoding) hit — a specific,
+      // actionable "photo too large" message that never actually reached the user.
       const maxSize = parseInt(process.env.MAX_PHOTO_SIZE_MB || '10') * 1024 * 1024;
+      let buffer: Buffer;
+      try {
+        buffer = await data.toBuffer();
+      } catch (error: any) {
+        if (error.code === 'FST_REQ_FILE_TOO_LARGE') {
+          return reply.status(400).send({ error: `Photo is too large (max ${process.env.MAX_PHOTO_SIZE_MB || '10'}MB). Try a smaller photo.` });
+        }
+        throw error;
+      }
+
+      // Kept as a defensive fallback in case the multipart limit above is ever misconfigured —
+      // toBuffer() should already have thrown for anything over maxSize.
       if (buffer.length > maxSize) {
-        return reply.status(400).send({ error: 'File too large' });
+        return reply.status(400).send({ error: `Photo is too large (max ${process.env.MAX_PHOTO_SIZE_MB || '10'}MB). Try a smaller photo.` });
       }
 
       // Check photo count
