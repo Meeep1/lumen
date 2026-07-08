@@ -15,6 +15,8 @@ struct DiscoveryView: View {
     /// point letting the button look tappable when it would just come back as an error).
     @State private var canUndoLastSwipe = false
     @State private var undoErrorMessage: String?
+    /// Bumped for a profile each time Undo restores its card — see cardStack's `.id()` for why.
+    @State private var swipeGeneration: [String: Int] = [:]
 
     // Filters
     @State private var filters = DiscoveryFilters()
@@ -200,6 +202,17 @@ struct DiscoveryView: View {
                         ProfileCardView(profile: profile, isTopCard: index == currentIndex) { direction in
                             await handleSwipe(on: profile, direction: direction)
                         }
+                        // ProfileCardView's fly-off drag offset lives in its own @State, reset
+                        // on init but never afterward. Its enclosing `if` above means the card
+                        // is only ever conditionally *present* in this ZStack, not driven
+                        // through a real removal/insertion transition — so when Undo brings a
+                        // swiped card's index back into range, SwiftUI can hand it back its old
+                        // view identity with the stale off-screen offset still attached,
+                        // rendering (and hit-testing) off-frame and making the stack look frozen.
+                        // Forcing a new identity every time this profile is (re)restored via
+                        // undo guarantees a completely fresh ProfileCardView — and therefore a
+                        // reset offset — regardless of what SwiftUI would have reused on its own.
+                        .id("\(profile.id)-\(swipeGeneration[profile.id] ?? 0)")
                         .frame(width: geo.size.width, height: geo.size.height)
                         .clipped()
                         .offset(y: CGFloat(index - currentIndex) * 10)
@@ -303,9 +316,11 @@ struct DiscoveryView: View {
 
     private func undoLastSwipe() async {
         guard currentIndex > 0 else { return }
+        let restoredProfileId = profiles[currentIndex - 1].id
 
         do {
             _ = try await APIService.shared.undoLastSwipe()
+            swipeGeneration[restoredProfileId, default: 0] += 1
             withAnimation {
                 currentIndex -= 1
             }

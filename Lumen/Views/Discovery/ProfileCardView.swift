@@ -100,21 +100,6 @@ struct ProfileCardView: View {
         .offset(offset)
         .rotationEffect(.degrees(rotation))
         .simultaneousGesture(isTopCard ? cardDragGesture : nil)
-        // triggerSwipe flies this card off-screen but never resets `offset` back — normally
-        // moot, since a swiped card's index falls outside cardStack's visible range and the
-        // whole card is removed. But an Undo brings that same index back into range, and
-        // because this view sits inside a plain `if` in a ForEach (not a `.removed` transition
-        // that fully re-initializes state), it can come back still holding its stale
-        // fly-off offset — rendering (and hit-testing) off-frame instead of centered, which
-        // looked like the card never returned and the stack stopped responding to swipes.
-        // Resetting whenever this card (re)becomes the top card covers both the undo case and
-        // the ordinary one (already zero there, so it's a no-op).
-        .onChange(of: isTopCard) { _, isNowTop in
-            if isNowTop {
-                offset = .zero
-                rotation = 0
-            }
-        }
     }
 
     private var cardDragGesture: some Gesture {
