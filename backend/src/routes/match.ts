@@ -176,15 +176,9 @@ export default async function matchRoutes(fastify: FastifyInstance) {
 
       // If sending an image, check if message threshold is met
       if (data.imageUrl) {
-        const messageCount = await prisma.message.count({
-          where: { matchId },
-        });
-
-        const threshold = parseInt(process.env.IMAGE_MESSAGE_UNLOCK_THRESHOLD || '3');
-        if (messageCount < threshold) {
-          return reply.status(403).send({
-            error: `Exchange at least ${threshold} messages before sending images`,
-          });
+        const unlockError = await checkImageUnlockThreshold(matchId);
+        if (unlockError) {
+          return reply.status(403).send({ error: unlockError });
         }
       }
 
@@ -236,12 +230,9 @@ export default async function matchRoutes(fastify: FastifyInstance) {
 
       // Checked before even reading the upload off the wire — no point accepting a file for a
       // conversation that isn't unlocked for images yet.
-      const messageCount = await prisma.message.count({ where: { matchId } });
-      const threshold = parseInt(process.env.IMAGE_MESSAGE_UNLOCK_THRESHOLD || '3');
-      if (messageCount < threshold) {
-        return reply.status(403).send({
-          error: `Exchange at least ${threshold} messages before sending images`,
-        });
+      const unlockError = await checkImageUnlockThreshold(matchId);
+      if (unlockError) {
+        return reply.status(403).send({ error: unlockError });
       }
 
       const data = await request.file();
@@ -320,6 +311,23 @@ export default async function matchRoutes(fastify: FastifyInstance) {
       return reply.status(500).send({ error: 'Failed to unmatch' });
     }
   });
+}
+
+// Returns an error string if images are still locked, null if they're unlocked. A plain
+// `count >= threshold` let one person alone fire off the same number of messages back-to-back
+// and unlock images without the other person ever replying — requiring both participants to
+// show up in the sender list makes this an actual back-and-forth, not a one-sided message count.
+async function checkImageUnlockThreshold(matchId: string): Promise<string | null> {
+  const threshold = parseInt(process.env.IMAGE_MESSAGE_UNLOCK_THRESHOLD || '3');
+  const [messageCount, senders] = await Promise.all([
+    prisma.message.count({ where: { matchId } }),
+    prisma.message.groupBy({ by: ['senderId'], where: { matchId } }),
+  ]);
+
+  if (messageCount < threshold || senders.length < 2) {
+    return `Exchange at least ${threshold} messages back and forth before sending images`;
+  }
+  return null;
 }
 
 function calculateAge(dateOfBirth: Date): number {

@@ -47,7 +47,7 @@ struct LikeResponseView: View {
                     }
 
                     HStack {
-                        Text("\(like.age)")
+                        Text("\(like.name), \(like.age)")
                             .font(.system(.largeTitle, design: .rounded).bold())
                         if like.isVerified {
                             Image(systemName: "checkmark.seal.fill")
