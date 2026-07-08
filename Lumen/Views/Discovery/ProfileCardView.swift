@@ -154,7 +154,7 @@ struct ProfileCardView: View {
     private var infoSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("\(profile.age)")
+                Text("\(profile.name), \(profile.age)")
                     .font(.system(.largeTitle, design: .rounded).bold())
 
                 if profile.isVerified {

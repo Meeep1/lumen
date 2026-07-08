@@ -9,6 +9,7 @@ struct SignupView: View {
     /// the authentication for this account), everything else still applies the same.
     var appleIdentityToken: String? = nil
 
+    @State private var name = ""
     @State private var email = ""
     @State private var phone = ""
     @State private var password = ""
@@ -42,6 +43,15 @@ struct SignupView: View {
 
                     Text("Create Account")
                         .font(.largeTitle.bold())
+
+                    // Name
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("First Name")
+                            .font(.subheadline.weight(.medium))
+                        TextField("What should we call you?", text: $name)
+                            .textContentType(.givenName)
+                            .textFieldStyle(LumenTextFieldStyle())
+                    }
 
                     // Email
                     VStack(alignment: .leading, spacing: 8) {
@@ -171,6 +181,7 @@ struct SignupView: View {
     }
     
     private var isFormValid: Bool {
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         !email.isEmpty &&
         email.contains("@") &&
         !phone.isEmpty &&
@@ -182,6 +193,7 @@ struct SignupView: View {
 
     private func createAccount() async {
         let result = await authManager.signup(
+            name: name.trimmingCharacters(in: .whitespacesAndNewlines),
             email: email,
             phone: phone,
             password: appleIdentityToken == nil ? password : nil,

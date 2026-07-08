@@ -68,6 +68,12 @@ model User {
   // signs up via Apple or links Apple to an existing email/password account.
   appleUserId String? @unique
 
+  // First name only — no last name is collected, on purpose, matching every other dating app's
+  // privacy norms (a full legal name isn't needed for anyone to swipe on or chat with you).
+  // Collected once at signup, alongside dateOfBirth/genderIdentity below, and (like those two)
+  // never wiped by resetTestAccount's onboarding-only reset.
+  name String
+
   dateOfBirth             DateTime
   genderIdentity          GenderIdentity
   genderIdentityOther     String?

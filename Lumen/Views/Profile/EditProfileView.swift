@@ -4,6 +4,7 @@ struct EditProfileView: View {
     @EnvironmentObject var authManager: AuthenticationManager
     @Environment(\.dismiss) var dismiss
 
+    @State private var name = ""
     @State private var genderIdentity: GenderIdentity = .woman
     @State private var genderIdentityOther = ""
     @State private var bio = ""
@@ -40,6 +41,14 @@ struct EditProfileView: View {
 
                 ScrollView {
                     VStack(spacing: 20) {
+                        SettingsSection(title: "Name") {
+                            SettingsCard {
+                                TextField("First Name", text: $name)
+                                    .textContentType(.givenName)
+                                    .padding(16)
+                            }
+                        }
+
                         SettingsSection(title: "Gender Identity") {
                             SettingsCard {
                                 VStack(alignment: .leading, spacing: 8) {
@@ -187,6 +196,7 @@ struct EditProfileView: View {
     private func loadCurrentProfile() {
         guard let user = authManager.currentUser else { return }
 
+        name = user.name
         genderIdentity = user.genderIdentity
         genderIdentityOther = user.genderIdentityOther ?? ""
         bio = user.bio ?? ""
@@ -224,7 +234,9 @@ struct EditProfileView: View {
         isSaving = true
         defer { isSaving = false }
 
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let update = ProfileUpdate(
+            name: trimmedName.isEmpty ? nil : trimmedName,
             genderIdentity: genderIdentity,
             genderIdentityOther: genderIdentity == .other ? (genderIdentityOther.isEmpty ? nil : genderIdentityOther) : nil,
             bio: bio.isEmpty ? nil : bio,

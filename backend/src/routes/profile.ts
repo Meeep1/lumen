@@ -49,6 +49,7 @@ export default async function profileRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         id: user.id,
+        name: user.name,
         email: user.email,
         phone: user.phone,
         dateOfBirth: user.dateOfBirth,
@@ -126,6 +127,7 @@ export default async function profileRoutes(fastify: FastifyInstance) {
 
       return reply.send({
         id: user.id,
+        name: user.name,
         age: calculateAge(user.dateOfBirth),
         genderIdentity: user.genderIdentity,
         genderIdentityOther: user.genderIdentityOther,
@@ -189,6 +191,7 @@ export default async function profileRoutes(fastify: FastifyInstance) {
       return reply.send({
         message: 'Profile updated',
         profile: {
+          name: user.name,
           bio: user.bio,
           pronouns: user.pronouns,
           styleTags: user.styleTags,

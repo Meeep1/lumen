@@ -50,6 +50,7 @@ async function main() {
       isVerified: false, verificationPhotoUrl: null, verificationStatus: 'none',
     },
     create: {
+      name: 'Alex',
       email,
       phone: `+1000${crypto.randomInt(1000000, 9999999)}`,
       passwordHash,

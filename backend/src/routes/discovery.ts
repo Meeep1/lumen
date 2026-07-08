@@ -165,6 +165,7 @@ export default async function discoveryRoutes(fastify: FastifyInstance) {
 
           return {
             id: user.id,
+            name: user.name,
             age: calculateAge(user.dateOfBirth),
             genderIdentity: user.genderIdentity,
             genderIdentityOther: user.genderIdentityOther,

@@ -69,6 +69,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
       // Create user
       const user = await prisma.user.create({
         data: {
+          name: data.name,
           email: data.email,
           phone: data.phone,
           passwordHash,

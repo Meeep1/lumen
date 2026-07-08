@@ -169,7 +169,7 @@ struct ProfileView: View {
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
-                        Text("\(user.age ?? 0)")
+                        Text("\(user.name), \(user.age ?? 0)")
                             .font(.system(size: 32, weight: .bold))
                         if user.isVerified {
                             Image(systemName: "checkmark.seal.fill")

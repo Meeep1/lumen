@@ -21,6 +21,7 @@ export default async function matchRoutes(fastify: FastifyInstance) {
           userA: {
             select: {
               id: true,
+              name: true,
               genderIdentity: true,
               genderIdentityOther: true,
               dateOfBirth: true,
@@ -37,6 +38,7 @@ export default async function matchRoutes(fastify: FastifyInstance) {
           userB: {
             select: {
               id: true,
+              name: true,
               genderIdentity: true,
               genderIdentityOther: true,
               dateOfBirth: true,
@@ -76,6 +78,7 @@ export default async function matchRoutes(fastify: FastifyInstance) {
           return {
             matchId: match.id,
             userId: otherUser.id,
+            name: otherUser.name,
             age: calculateAge(otherUser.dateOfBirth),
             genderIdentity: otherUser.genderIdentity,
             cityDisplay: otherUser.cityDisplay,

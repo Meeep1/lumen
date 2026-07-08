@@ -79,6 +79,7 @@ export default async function swipeRoutes(fastify: FastifyInstance) {
             userA: {
               select: {
                 id: true,
+                name: true,
                 genderIdentity: true,
                 photos: {
                   where: { moderationStatus: 'approved' as const },
@@ -90,6 +91,7 @@ export default async function swipeRoutes(fastify: FastifyInstance) {
             userB: {
               select: {
                 id: true,
+                name: true,
                 genderIdentity: true,
                 photos: {
                   where: { moderationStatus: 'approved' as const },
@@ -127,6 +129,7 @@ export default async function swipeRoutes(fastify: FastifyInstance) {
 
       if (match) {
         const otherUserId = match.userAId === request.userId ? match.userBId : match.userAId;
+        const otherUser = match.userAId === request.userId ? match.userB : match.userA;
 
         // Only the other participant needs telling — the requester already has the match
         // result in this very response.
@@ -140,7 +143,7 @@ export default async function swipeRoutes(fastify: FastifyInstance) {
         return reply.send({
           matched: true,
           matchId: match.id,
-          matchedUser: { id: otherUserId },
+          matchedUser: { id: otherUserId, name: otherUser.name },
         });
       }
 
@@ -250,6 +253,7 @@ export default async function swipeRoutes(fastify: FastifyInstance) {
           swiper: {
             select: {
               id: true,
+              name: true,
               genderIdentity: true,
               genderIdentityOther: true,
               bio: true,
@@ -336,6 +340,7 @@ export default async function swipeRoutes(fastify: FastifyInstance) {
 
           return {
             id: like.swiper.id,
+            name: like.swiper.name,
             age: calculateAge(like.swiper.dateOfBirth),
             genderIdentity: like.swiper.genderIdentity,
             genderIdentityOther: like.swiper.genderIdentityOther,

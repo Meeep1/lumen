@@ -45,6 +45,7 @@ async function resolveRealUser(): Promise<{ id: string | null; lat: number; lon:
 
 interface SeedProfile {
   handle: string;
+  name: string;
   genderIdentity: 'woman' | 'femboy' | 'trans_woman' | 'nonbinary_feminine' | 'other';
   genderIdentityOther?: string;
   pronouns: string;
@@ -69,56 +70,56 @@ interface SeedProfile {
 }
 
 const PROFILES: SeedProfile[] = [
-  { handle: 'mia', genderIdentity: 'woman', pronouns: 'she/her',
+  { handle: 'mia', name: 'Mia', genderIdentity: 'woman', pronouns: 'she/her',
     bio: 'Coffee snob, plant mom, will talk your ear off about my cat.',
     styleTags: ['cottagecore', 'cozy', 'plant mom'], age: 26, isVerified: true,
     heightInches: 65, jobTitle: 'Barista', school: 'Portland State',
     prompt1Question: 'A random fact I love is...', prompt1Answer: 'Octopi have three hearts.',
     latJitter: 0.01, lonJitter: -0.02, likeMessage: 'Your plant collection looks incredible!' },
-  { handle: 'kenji', genderIdentity: 'femboy', pronouns: 'he/they',
+  { handle: 'kenji', name: 'Kenji', genderIdentity: 'femboy', pronouns: 'he/they',
     bio: 'Rhythm game enjoyer. Will absolutely lose to me at Tetris.',
     styleTags: ['gamer girl', 'y2k', 'streetwear'], age: 24, isVerified: false,
     heightInches: 68, jobTitle: 'QA Tester',
     prompt1Question: 'My ideal Sunday...', prompt1Answer: 'Arcade until my hands hurt.',
     latJitter: -0.03, lonJitter: 0.015 },
-  { handle: 'sasha', genderIdentity: 'trans_woman', pronouns: 'she/her',
+  { handle: 'sasha', name: 'Sasha', genderIdentity: 'trans_woman', pronouns: 'she/her',
     bio: 'Photographer. I will make you pose for way too many pictures.',
     styleTags: ['soft goth', 'artsy', 'alt'], age: 29, isVerified: true,
     heightInches: 70, jobTitle: 'Freelance Photographer', school: 'RISD',
     prompt1Question: 'The way to win me over is...', prompt1Answer: 'Let me art-direct our first photo together.',
     latJitter: 0.04, lonJitter: 0.03, likeMessage: 'Okay but your prompt answer is extremely real' },
-  { handle: 'river', genderIdentity: 'nonbinary_feminine', pronouns: 'they/them',
+  { handle: 'river', name: 'River', genderIdentity: 'nonbinary_feminine', pronouns: 'they/them',
     bio: 'Runs, climbs, occasionally falls off things. Looking for a belay partner.',
     styleTags: ['sporty', 'outdoorsy'], age: 27, isVerified: false,
     heightInches: 66, jobTitle: 'Physical Therapist',
     prompt1Question: "I'm weirdly competitive about...", prompt1Answer: 'Parallel parking.',
     latJitter: -0.015, lonJitter: -0.04 },
-  { handle: 'dahlia', genderIdentity: 'woman', pronouns: 'she/her',
+  { handle: 'dahlia', name: 'Dahlia', genderIdentity: 'woman', pronouns: 'she/her',
     bio: 'Cottagecore in theory, takeout in practice.',
     styleTags: ['cottagecore', 'cozy'], age: 31, isVerified: false,
     heightInches: 63, jobTitle: 'Elementary School Teacher', school: 'UMass Amherst',
     prompt1Question: 'Two truths and a lie...', prompt1Answer: "I've been to 12 countries, I hate cilantro, I once won a pie-eating contest.",
     latJitter: 0.02, lonJitter: 0.05 },
-  { handle: 'quinn', genderIdentity: 'nonbinary_feminine', pronouns: 'they/she',
+  { handle: 'quinn', name: 'Quinn', genderIdentity: 'nonbinary_feminine', pronouns: 'they/she',
     bio: 'DJ on weekends, extremely tired on weekdays.',
     styleTags: ['y2k', 'nightlife', 'alt'], age: 25, isVerified: false,
     heightInches: 69, jobTitle: 'DJ / Sound Engineer',
     prompt1Question: 'My love language is...', prompt1Answer: 'Sending you a playlist at 2am.',
     latJitter: -0.05, lonJitter: 0.01, likeMessage: 'We have to talk about music taste' },
-  { handle: 'noa', genderIdentity: 'other', genderIdentityOther: 'Genderfluid',
+  { handle: 'noa', name: 'Noa', genderIdentity: 'other', genderIdentityOther: 'Genderfluid',
     pronouns: 'she/they',
     bio: 'Currently reading four books at once and finishing none of them.',
     styleTags: ['cozy', 'artsy', 'bookish'], age: 23, isVerified: false,
     heightInches: 64, jobTitle: 'Grad Student', school: 'Bowdoin College',
     prompt1Question: 'A random fact I love is...', prompt1Answer: 'Wombats poop cubes.',
     latJitter: 0.03, lonJitter: -0.01 },
-  { handle: 'wren', genderIdentity: 'femboy', pronouns: 'he/him',
+  { handle: 'wren', name: 'Wren', genderIdentity: 'femboy', pronouns: 'he/him',
     bio: 'Skateboarding badly since 2015. Ask me about my playlist.',
     styleTags: ['streetwear', 'alt', 'gamer girl'], age: 22, isVerified: true,
     heightInches: 67, jobTitle: 'Barista',
     prompt1Question: 'My ideal Sunday...', prompt1Answer: 'Skating until I eat pavement, then tacos.',
     latJitter: -0.02, lonJitter: -0.03 },
-  { handle: 'iris', genderIdentity: 'trans_woman', pronouns: 'she/her',
+  { handle: 'iris', name: 'Iris', genderIdentity: 'trans_woman', pronouns: 'she/her',
     bio: 'Baker. I will absolutely try to feed you within ten minutes of meeting.',
     styleTags: ['cottagecore', 'cozy', 'bookish'], age: 30, isVerified: false,
     heightInches: 62, jobTitle: 'Pastry Chef', school: 'Culinary Institute of America',
@@ -179,6 +180,11 @@ const BIOS = [
   "Somehow always the one organizing the group trip.",
 ];
 const TAGS_POOL = ['cottagecore', 'cozy', 'plant mom', 'gamer girl', 'y2k', 'streetwear', 'soft goth', 'artsy', 'alt', 'sporty', 'outdoorsy', 'nightlife', 'bookish'];
+const FIRST_NAMES = [
+  'Ava', 'Sofia', 'Luna', 'Zoe', 'Maya', 'Ruby', 'Nora', 'Piper', 'Hazel', 'Vera',
+  'Skylar', 'Reese', 'Rowan', 'Emerson', 'Sage', 'Jules', 'Remy', 'Alex', 'Charlie', 'Devon',
+  'Kai', 'Ari', 'Tatum', 'Blair', 'Finley', 'Marley', 'Wren', 'Indigo', 'Juniper', 'Lennon',
+];
 const GENDERS: SeedProfile['genderIdentity'][] = ['woman', 'femboy', 'trans_woman', 'nonbinary_feminine', 'other'];
 const PRONOUNS_BY_GENDER: Record<string, string[]> = {
   woman: ['she/her'],
@@ -213,6 +219,7 @@ function generateProceduralProfiles(count: number): SeedProfile[] {
 
     return {
       handle: `test${i + 1}`,
+      name: pick(FIRST_NAMES),
       photoHandle: PHOTO_HANDLES[i % PHOTO_HANDLES.length],
       genderIdentity,
       genderIdentityOther: genderIdentity === 'other' ? 'Genderfluid' : undefined,
@@ -255,6 +262,7 @@ async function main() {
 
     const user = await prisma.user.create({
       data: {
+        name: p.name,
         email,
         phone,
         passwordHash,
@@ -293,9 +301,9 @@ async function main() {
 
     for (const [order, filename] of photoFilenames.entries()) {
       const buffer = fs.readFileSync(path.join(__dirname, 'seed-assets', filename));
-      const photoKey = await uploadPhoto(buffer, user.id);
+      const { url, thumbnailUrl } = await uploadPhoto(buffer, user.id);
       await prisma.photo.create({
-        data: { userId: user.id, url: photoKey, order, moderationStatus: 'approved' },
+        data: { userId: user.id, url, thumbnailUrl, order, moderationStatus: 'approved' },
       });
     }
 

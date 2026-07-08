@@ -143,7 +143,7 @@ struct MatchProfileView: View {
 
             HStack(alignment: .bottom) {
                 HStack(spacing: 6) {
-                    Text("\(profile.age ?? 0)")
+                    Text("\(profile.name), \(profile.age ?? 0)")
                         .font(.system(size: 32, weight: .bold))
                     if profile.isVerified {
                         Image(systemName: "checkmark.seal.fill")

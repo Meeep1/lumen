@@ -101,13 +101,14 @@ struct LikeResponseView: View {
             .fullScreenCover(isPresented: $matched) {
                 MatchCelebrationView(
                     photoURL: APIService.shared.imageURL(for: like.primaryPhoto),
-                    genderIdentity: like.genderIdentity,
+                    name: like.name,
                     dismissLabel: "Not Now",
                     onSendMessage: {
                         if let matchedMatchId {
                             chatMatch = Match(
                                 matchId: matchedMatchId,
                                 userId: like.id,
+                                name: like.name,
                                 age: like.age,
                                 genderIdentity: like.genderIdentity,
                                 cityDisplay: like.cityDisplay,
@@ -302,7 +303,7 @@ struct LikeResponseView: View {
 
 #Preview {
     LikeResponseView(like: LikeReceived(
-        id: "preview", age: 25, genderIdentity: .woman, genderIdentityOther: nil,
+        id: "preview", name: "Preview", age: 25, genderIdentity: .woman, genderIdentityOther: nil,
         bio: "Preview bio", pronouns: "she/her", styleTags: [], heightInches: nil,
         jobTitle: nil, school: nil, prompt1Question: nil, prompt1Answer: nil,
         prompt2Question: nil, prompt2Answer: nil, prompt3Question: nil, prompt3Answer: nil, cityDisplay: nil, isVerified: false,

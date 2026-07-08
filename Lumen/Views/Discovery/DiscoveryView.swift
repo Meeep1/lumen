@@ -65,12 +65,13 @@ struct DiscoveryView: View {
             .fullScreenCover(item: $matchedProfile) { profile in
                 MatchCelebrationView(
                     photoURL: APIService.shared.imageURL(for: profile.primaryPhoto),
-                    genderIdentity: profile.genderIdentity,
+                    name: profile.name,
                     onSendMessage: {
                         if let matchedMatchId {
                             chatMatch = Match(
                                 matchId: matchedMatchId,
                                 userId: profile.id,
+                                name: profile.name,
                                 age: profile.age,
                                 genderIdentity: profile.genderIdentity,
                                 cityDisplay: profile.cityDisplay,
@@ -330,7 +331,7 @@ struct DiscoveryView: View {
 /// paths to a match land on the exact same screen rather than two hand-maintained lookalikes.
 struct MatchCelebrationView: View {
     let photoURL: URL?
-    let genderIdentity: GenderIdentity
+    let name: String
     /// "Keep Swiping" makes sense from Discovery, but there's no swiping happening on the Likes
     /// You path (you already responded to an incoming like) — callers there pass something else.
     var dismissLabel: String = "Keep Swiping"
@@ -382,7 +383,7 @@ struct MatchCelebrationView: View {
                     }
                 }
 
-                Text("You and \(genderIdentity.displayName.lowercased()) matched. Break the ice and send the first message.")
+                Text("You and \(name) matched. Break the ice and send the first message.")
                     .foregroundColor(.white.opacity(0.85))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)

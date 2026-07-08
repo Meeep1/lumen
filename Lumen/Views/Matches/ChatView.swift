@@ -43,7 +43,7 @@ struct ChatView: View {
                             .frame(width: 28, height: 28)
                             .clipShape(Circle())
 
-                            Text("\(match.age)")
+                            Text("\(match.name), \(match.age)")
                                 .font(.headline)
                                 .foregroundColor(.primary)
 
@@ -501,6 +501,7 @@ struct FullscreenImageView: View {
         ChatView(match: Match(
             matchId: "1",
             userId: "2",
+            name: "Mia",
             age: 25,
             genderIdentity: .woman,
             cityDisplay: "New York",

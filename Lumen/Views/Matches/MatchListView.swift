@@ -135,7 +135,7 @@ struct MatchRowView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text("\(match.age)")
+                    Text("\(match.name), \(match.age)")
                         .font(.headline)
 
                     if match.isVerified {

@@ -4,6 +4,7 @@ import Foundation
 
 struct User: Codable, Identifiable {
     let id: String
+    let name: String
     let email: String?
     let phone: String?
     let dateOfBirth: Date?
@@ -131,6 +132,7 @@ struct VerificationPoseResponse: Codable {
 }
 
 struct ProfileUpdate: Codable {
+    let name: String?
     let genderIdentity: GenderIdentity?
     let genderIdentityOther: String?
     let bio: String?
@@ -154,6 +156,7 @@ struct ProfileUpdate: Codable {
     let notifyNewLike: Bool?
 
     init(
+        name: String? = nil,
         genderIdentity: GenderIdentity? = nil, genderIdentityOther: String? = nil,
         bio: String?, pronouns: String?, styleTags: [String]?, heightInches: Int?,
         jobTitle: String?, school: String?, prompt1Question: String?, prompt1Answer: String?,
@@ -162,6 +165,7 @@ struct ProfileUpdate: Codable {
         cityDisplay: String?, discoverable: Bool?,
         notifyNewMatch: Bool? = nil, notifyNewMessage: Bool? = nil, notifyNewLike: Bool? = nil
     ) {
+        self.name = name
         self.genderIdentity = genderIdentity
         self.genderIdentityOther = genderIdentityOther
         self.bio = bio
@@ -190,6 +194,7 @@ struct ProfileUpdate: Codable {
 
 struct DiscoveryProfile: Codable, Identifiable {
     let id: String
+    let name: String
     let age: Int
     let genderIdentity: GenderIdentity
     let genderIdentityOther: String?
@@ -238,6 +243,7 @@ struct DiscoveryProfile: Codable, Identifiable {
     /// "preview my profile" shows the real thing rather than a lookalike built separately.
     init(previewing user: User) {
         id = user.id
+        name = user.name
         age = user.age ?? 0
         genderIdentity = user.genderIdentity
         genderIdentityOther = user.genderIdentityOther
@@ -308,6 +314,7 @@ struct UndoSwipeResult: Codable {
 
 struct LikeReceived: Codable, Identifiable {
     let id: String
+    let name: String
     let age: Int
     let genderIdentity: GenderIdentity
     let genderIdentityOther: String?
@@ -343,6 +350,7 @@ struct LikeReceived: Codable, Identifiable {
 
 struct MatchedUser: Codable {
     let id: String
+    let name: String
 }
 
 // MARK: - Match Models
@@ -350,6 +358,7 @@ struct MatchedUser: Codable {
 struct Match: Codable, Identifiable {
     let matchId: String
     let userId: String
+    let name: String
     let age: Int
     let genderIdentity: GenderIdentity
     let cityDisplay: String?
@@ -401,6 +410,7 @@ struct SendMessage: Codable {
 // MARK: - Auth Models
 
 struct SignupRequest: Codable {
+    let name: String
     let email: String
     let phone: String
     // Absent for an Apple sign-up (appleIdentityToken set instead) — Apple's identity token is

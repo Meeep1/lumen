@@ -127,7 +127,7 @@ private struct LikeTile: View {
             VStack(alignment: .leading, spacing: 3) {
                 Label(likeContextLabel, systemImage: likeContextIcon)
                     .font(.caption2.weight(.semibold))
-                Text("\(like.age)")
+                Text("\(like.name), \(like.age)")
                     .font(.system(.title3, design: .rounded).bold())
             }
             .foregroundColor(.white)

@@ -43,7 +43,7 @@ struct ProfilePreviewView: View {
 
 #Preview {
     ProfilePreviewView(user: User(
-        id: "1", email: nil, phone: nil, dateOfBirth: nil, age: 26,
+        id: "1", name: "Mia", email: nil, phone: nil, dateOfBirth: nil, age: 26,
         genderIdentity: .woman, genderIdentityOther: nil, bio: "Coffee snob, plant mom.",
         pronouns: "she/her", styleTags: ["cottagecore", "cozy"], heightInches: 65,
         jobTitle: "Barista", school: nil, prompt1Question: "A random fact I love is...",

@@ -58,6 +58,7 @@ class AuthenticationManager: ObservableObject {
     // MARK: - Sign Up Flow
     
     func signup(
+        name: String,
         email: String,
         phone: String,
         password: String?,
@@ -78,6 +79,7 @@ class AuthenticationManager: ObservableObject {
         let dobString = formatter.string(from: dateOfBirth)
 
         let request = SignupRequest(
+            name: name,
             email: email,
             phone: phone,
             password: password,

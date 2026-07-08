@@ -11,6 +11,7 @@ export function zodErrorMessage(error: z.ZodError): string {
 }
 
 export const signupSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required').max(50, 'Name must be 50 characters or less'),
   email: z.string().email('Invalid email address'),
   phone: z.string().min(10, 'Phone number must be at least 10 digits'),
   // Optional because an Apple sign-up has no password at all — Apple's identity token is the
@@ -92,6 +93,7 @@ export const PROMPT_QUESTIONS = [
 ] as const;
 
 export const updateProfileSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required').max(50, 'Name must be 50 characters or less').optional(),
   genderIdentity: z.enum(['woman', 'femboy', 'trans_woman', 'nonbinary_feminine', 'other']).optional(),
   genderIdentityOther: z.string().max(100).optional(),
   bio: z.string().max(500).optional(),
